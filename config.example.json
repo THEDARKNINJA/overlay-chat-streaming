@@ -1,0 +1,10 @@
+{
+  "twitch": {
+    "channel": "nombre_del_canal",
+    "channelId": "123456789"
+  },
+  "youtube": {
+    "videoId": "ID_DEL_VIDEO",
+    "apiKey": "TU_API_KEY"
+  }
+}

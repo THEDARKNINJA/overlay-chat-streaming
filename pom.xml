@@ -1,0 +1,49 @@
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.chatoverlay</groupId>
+  <artifactId>chat-overlay</artifactId>
+  <version>1.0</version>
+
+  <properties>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+  </properties>
+
+  <dependencies>
+    <!-- Para la YouTube Data API v3 -->
+    <dependency>
+      <groupId>com.google.apis</groupId>
+      <artifactId>google-api-services-youtube</artifactId>
+      <version>v3-rev20231011-2.0.0</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.http-client</groupId>
+      <artifactId>google-http-client-jackson2</artifactId>
+      <version>1.43.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.json</groupId>
+      <artifactId>json</artifactId>
+      <version>20231013</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.4.1</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <mainClass>com.chatoverlay.Main</mainClass>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
