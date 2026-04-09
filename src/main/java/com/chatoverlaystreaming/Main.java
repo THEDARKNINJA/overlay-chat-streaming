@@ -39,7 +39,8 @@ public class Main {
 
         // Lanzar interfaz
         SwingUtilities.invokeLater(() -> {
-            ChatOverlay overlay = new ChatOverlay(queue, config.getTwitchChannelId());
+            ChatOverlay overlay = new ChatOverlay(queue, config.getTwitchChannelId(),
+                                                  config.getPanelX(), config.getPanelY(), config.getPanelWidth(), config.getPanelHeight());
             overlay.setVisible(true);
         });
     }

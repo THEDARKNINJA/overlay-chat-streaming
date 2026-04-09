@@ -45,6 +45,29 @@ public class YouTubeChatReader implements Runnable {
                 .build();
 
         // Obtener el liveChatId del vídeo
+        /*
+        YouTube.Search.List request = youtube.search().list(List.of("snippet"));
+        request.setEventType("live");          // 🔥 solo streams en directo
+        request.setType(List.of("video"));     // solo vídeos
+        request.setMaxResults(1L);            // cantidad de resultados
+        //request.setQ("gaming");                // opcional: filtrar por temática
+        request.setKey(apiKey);
+
+        SearchListResponse response = request.execute();
+
+        System.err.println(response);
+        // Sacar videoId de cada directo encontrado
+        for (SearchResult result : response.getItems()) {
+
+            String videoId = result.getId().getVideoId();
+            String title = result.getSnippet().getTitle();
+
+            System.err.println("Título: " + title);
+            System.err.println("Video ID: " + videoId);
+            System.err.println("-------------------------");
+        }
+         */
+
         VideoListResponse videoResponse = youtube.videos()
                 .list(List.of("liveStreamingDetails"))
                 .setId(List.of(videoId))

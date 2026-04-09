@@ -26,7 +26,7 @@ public class ChatOverlay extends JFrame {
     private final BTTVEmoteCache   bttvEmoteCache;
     private final EmoteRenderer    emoteRenderer = new EmoteRenderer();
 
-    public ChatOverlay(BlockingQueue<ChatMessage> queue, String twitchChannelId) {
+    public ChatOverlay(BlockingQueue<ChatMessage> queue, String twitchChannelId, int x_panel, int y_panel, int width_panel, int height_panel) {
         bttvEmoteCache = new BTTVEmoteCache(twitchChannelId);
         // Sin decoración de ventana (sin bordes ni barra de título)
         setUndecorated(true);
@@ -40,8 +40,8 @@ public class ChatOverlay extends JFrame {
         // Tipo de ventana: utilidad (no aparece en la barra de tareas)
         setType(Window.Type.UTILITY);
 
-        setSize(380, 500);
-        setLocation(20, 200);
+        setSize(width_panel, height_panel);
+        setLocation(x_panel, y_panel);
 
         // Panel con fondo semitransparente
         JPanel panel = new JPanel(new BorderLayout()) {

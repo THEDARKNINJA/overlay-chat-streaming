@@ -6,5 +6,11 @@
   "youtube": {
     "videoId": "ID_DEL_VIDEO",
     "apiKey": "TU_API_KEY"
+  },
+  "panel": {
+    "x": 20,
+    "y": 200,
+    "width": 380,
+    "height": 450
   }
 }
