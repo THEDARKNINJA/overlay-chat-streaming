@@ -30,6 +30,7 @@ public class ChatOverlay extends JFrame {
     private JMenuItem toggleItem;
     private JPanel dragBar;
     private Rectangle closeButtonRect = new Rectangle();
+    private Rectangle resizeHandleRect = new Rectangle();
     private boolean showBackground;
     private boolean isLocked = true;
     private boolean hasFocus = false;
@@ -174,6 +175,28 @@ public class ChatOverlay extends JFrame {
         dragBar.setPreferredSize(new Dimension(0, 15));
         makeDraggable(dragBar);
 
+        // Área resizable
+        JPanel resizeHandle = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                if (!hasFocus) return;
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(100, 60, 200, 180));
+                g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                int w = getWidth();
+                int h = getHeight();
+                // Tres líneas diagonales en la esquina
+                for (int i = 1; i <= 3; i++) {
+                    int offset = i * 4;
+                    g2.drawLine(w - offset, h, w, h - offset);
+                }
+                g2.dispose();
+            }
+        };
+        resizeHandle.setOpaque(false);
+        resizeHandle.setPreferredSize(new Dimension(16, 16));
+
         // Área de texto
         textPane = new JTextPane();
         textPane.setEditable(false);
@@ -227,6 +250,7 @@ public class ChatOverlay extends JFrame {
                     clickThrough.setClickThrough(false);
                 }
                 dragBar.repaint();
+                resizeHandle.repaint();
             }
 
             @Override
@@ -237,7 +261,9 @@ public class ChatOverlay extends JFrame {
                     clickThrough.setClickThrough(true);
                 }
                 dragBar.repaint();
+                resizeHandle.repaint();
             }
+            
         });
 
         dragBar.addMouseListener(new MouseAdapter() {
@@ -248,6 +274,86 @@ public class ChatOverlay extends JFrame {
                 }
             }
         });
+
+        dragBar.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                if (closeButtonRect.contains(e.getPoint())) {
+                    dragBar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                } else {
+                    dragBar.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                }
+            }
+        });
+
+        // Añadir el resize handle encima de todo en la esquina inferior derecha
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                resizeHandle.setBounds(
+                    getWidth() - 16,
+                    getHeight() - 16,
+                    16, 16
+                );
+                resizeHandleRect.setBounds(
+                    getWidth() - 16,
+                    getHeight() - 16,
+                    16, 16
+                );
+            }
+        });
+
+        // Añadirlo al JFrame directamente con posición absoluta
+        getLayeredPane().add(resizeHandle, JLayeredPane.DRAG_LAYER);
+        getLayeredPane().addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                resizeHandle.setBounds(
+                    getLayeredPane().getWidth() - 16,
+                    getLayeredPane().getHeight() - 16,
+                    16, 16
+                );
+            }
+        });
+
+        MouseAdapter resizeAdapter = new MouseAdapter() {
+            private Point dragStart;
+            private Dimension startSize;
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                setCursor(new Cursor(Cursor.SE_RESIZE_CURSOR));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                dragStart = e.getLocationOnScreen();
+                startSize = getSize();
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (dragStart == null) return;
+                Point current = e.getLocationOnScreen();
+                int newWidth  = Math.max(200, startSize.width  + current.x - dragStart.x);
+                int newHeight = Math.max(150, startSize.height + current.y - dragStart.y);
+                setSize(newWidth, newHeight);
+                revalidate();
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                dragStart = null;
+            }
+        };
+
+        resizeHandle.addMouseListener(resizeAdapter);
+        resizeHandle.addMouseMotionListener(resizeAdapter);
     }
 
     /**

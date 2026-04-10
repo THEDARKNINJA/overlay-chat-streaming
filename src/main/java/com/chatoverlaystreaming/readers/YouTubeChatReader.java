@@ -31,7 +31,6 @@ public class YouTubeChatReader implements Runnable {
 
     @Override
     public void run() {
-        
         youtube = new YouTube.Builder(
                 new NetHttpTransport(),
                 JacksonFactory.getDefaultInstance(),
