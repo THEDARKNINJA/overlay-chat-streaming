@@ -13,12 +13,18 @@ public class EmoteRenderer {
 
     private final ImageCache imageCache = new ImageCache();
 
+    /*
     private static final Color TWITCH_COLOR  = new Color(169, 112, 255);
     private static final Color YOUTUBE_COLOR = new Color(255, 80,  80);
     private static final Color USER_COLOR    = new Color(200, 200, 200);
-    private static final Color TEXT_COLOR    = new Color(240, 240, 240);
-    private static final Font  CHAT_FONT     = new Font("Segoe UI Emoji", Font.PLAIN, 13);
-    private static final int LINE_HEIGHT = 28; // altura de línea
+    private static final Color TEXT_COLOR    = new Color(240, 240, 240); 
+     */
+    private static final Color TWITCH_COLOR  = new Color(200, 140, 255); // morado más vivo
+    private static final Color YOUTUBE_COLOR = new Color(255, 80,  80);  // rojo ya está bastante vivo
+    private static final Color USER_COLOR    = new Color(255, 255, 255); // blanco puro
+    private static final Color TEXT_COLOR    = new Color(255, 255, 255); // blanco puro
+    private static final Font  CHAT_FONT     = new Font("Segoe UI Emoji", Font.PLAIN, 15);
+    private static final int LINE_HEIGHT = 16; // altura de línea
 
     private final ImageIcon TWITCH_ICON;
     private final ImageIcon YOUTUBE_ICON;

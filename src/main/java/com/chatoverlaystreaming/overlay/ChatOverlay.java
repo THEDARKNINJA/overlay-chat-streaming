@@ -90,7 +90,7 @@ public class ChatOverlay extends JFrame {
                         g2.fillRect(0, 0, getWidth(), getHeight());
                         // Luego pintar el fondo semitransparente del chat
                         // Ojo: sin alpha, color sólido
-                        g2.setColor(new Color(10, 10, 10));
+                        g2.setColor(new Color(0, 0, 0));
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
                 g2.dispose();
             }
