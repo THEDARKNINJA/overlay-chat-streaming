@@ -1,17 +1,18 @@
 package com.chatoverlaystreaming.overlay;
 
-import com.chatoverlaystreaming.emotes.BTTVEmoteCache;
-import com.chatoverlaystreaming.emotes.EmoteRenderer;
-import com.chatoverlaystreaming.emotes.TwitchEmoteCache;
+import com.chatoverlaystreaming.emotes.*;
 import com.chatoverlaystreaming.model.ChatMessage;
 import com.chatoverlaystreaming.model.EmoteToken;
 
 import javax.swing.*;
 import javax.swing.text.*;
+import javax.swing.event.PopupMenuListener;
+import javax.swing.event.PopupMenuEvent;
 import java.awt.*;
 import java.awt.event.*;
-import java.util.concurrent.BlockingQueue;
+import java.awt.image.BufferedImage;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 
 public class ChatOverlay extends JFrame {
 
@@ -19,49 +20,73 @@ public class ChatOverlay extends JFrame {
     private final StyledDocument doc;
     private static final int MAX_MESSAGES = 50;
 
-    // Colores por plataforma
-    private static final Color TEXT_COLOR    = new Color(240, 240, 240);
+    private final TwitchEmoteCache  twitchEmoteCache = new TwitchEmoteCache();
+    private final BTTVEmoteCache    bttvEmoteCache;
+    private final TwitchBadgeCache  badgeCache;
+    private final EmoteRenderer     emoteRenderer    = new EmoteRenderer();
 
-    private final TwitchEmoteCache twitchEmoteCache = new TwitchEmoteCache();
-    private final BTTVEmoteCache   bttvEmoteCache;
-    private final EmoteRenderer    emoteRenderer = new EmoteRenderer();
+    private WindowClickThrough clickThrough;
+    private TrayIcon trayIcon;
+    private JMenuItem toggleItem;
+    private boolean isLocked = true;
 
-    public ChatOverlay(BlockingQueue<ChatMessage> queue, String twitchChannelId, int x_panel, int y_panel, int width_panel, int height_panel) {
-        bttvEmoteCache = new BTTVEmoteCache(twitchChannelId);
-        // Sin decoración de ventana (sin bordes ni barra de título)
+    public ChatOverlay(BlockingQueue<ChatMessage> queue,
+                       String twitchChannelId,
+                       String twitchClientId,
+                       String twitchClientSecret, 
+                       int x_panel, int y_panel, int width_panel, int height_panel) {
+
         setUndecorated(true);
-
-        // Transparencia del fondo de la ventana
         setBackground(new Color(0, 0, 0, 0));
-
-        // Siempre por encima
         setAlwaysOnTop(true);
+        setType(Window.Type.NORMAL);
+        setSize(380, 500);
+        setLocation(20, 200);
 
-        // Tipo de ventana: utilidad (no aparece en la barra de tareas)
-        setType(Window.Type.UTILITY);
+        bttvEmoteCache = new BTTVEmoteCache(twitchChannelId);
+        badgeCache     = new TwitchBadgeCache(twitchClientId,
+                                              twitchClientSecret,
+                                              twitchChannelId);
 
-        setSize(width_panel, height_panel);
-        setLocation(x_panel, y_panel);
-
-        // Panel con fondo semitransparente
+        // Panel principal con fondo semitransparente
         JPanel panel = new JPanel(new BorderLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setColor(new Color(10, 10, 10, 160)); // negro con ~63% opacidad
+                g2.setColor(new Color(10, 10, 10, 160));
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
                 g2.dispose();
             }
         };
         panel.setOpaque(false);
 
+        // Barra de arrastre en la parte superior
+        JPanel dragBar = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setColor(new Color(40, 40, 40, 180));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+                // Tres puntitos para indicar que es arrastrable
+                g2.setColor(new Color(150, 150, 150, 200));
+                int cx = getWidth() / 2;
+                int cy = getHeight() / 2;
+                g2.fillOval(cx - 12, cy - 2, 5, 5);
+                g2.fillOval(cx - 2,  cy - 2, 5, 5);
+                g2.fillOval(cx + 8,  cy - 2, 5, 5);
+                g2.dispose();
+            }
+        };
+        dragBar.setOpaque(false);
+        dragBar.setPreferredSize(new Dimension(0, 20));
+        makeDraggable(dragBar);
+
         // Área de texto
         textPane = new JTextPane();
         textPane.setEditable(false);
         textPane.setOpaque(false);
         textPane.setBackground(new Color(0, 0, 0, 0));
-        textPane.setForeground(TEXT_COLOR);
-        textPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        textPane.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 13));
         doc = textPane.getStyledDocument();
 
         JScrollPane scroll = new JScrollPane(textPane);
@@ -70,13 +95,11 @@ public class ChatOverlay extends JFrame {
         scroll.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
 
-        panel.add(scroll, BorderLayout.CENTER);
+        panel.add(dragBar, BorderLayout.NORTH);
+        panel.add(scroll,  BorderLayout.CENTER);
         add(panel);
 
-        // Hacer la ventana arrastrable con el ratón
-        makeDraggable();
-
-        // Hilo que consume la cola y actualiza la UI
+        // Hilo consumidor de la cola
         Thread consumer = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
@@ -89,6 +112,164 @@ public class ChatOverlay extends JFrame {
         });
         consumer.setDaemon(true);
         consumer.start();
+
+        addWindowFocusListener(new WindowFocusListener() {
+            @Override
+            public void windowGainedFocus(WindowEvent e) {
+                isLocked = false;
+                if (clickThrough != null) {
+                    clickThrough.setClickThrough(false);
+                }
+            }
+
+            @Override
+            public void windowLostFocus(WindowEvent e) {
+                isLocked = true;
+                if (clickThrough != null) {
+                    clickThrough.setClickThrough(true);
+                }
+            }
+        });
+    }
+
+    /**
+     * Llamar desde Main.java justo después de setVisible(true).
+     * Inicializa el click-through y el icono de bandeja.
+     */
+    public void initNativeFeatures() {
+        try {
+            clickThrough = new WindowClickThrough(this);
+            clickThrough.setClickThrough(isLocked);
+        } catch (Exception e) {
+            System.err.println("[Overlay] Click-through no disponible: " + e.getMessage());
+        }
+
+        if (SystemTray.isSupported()) {
+            setupTrayIcon();
+        } else {
+            System.err.println("[Overlay] La bandeja del sistema no está soportada.");
+        }
+    }
+
+    /* 
+    private void setupTrayIcon() {
+        SystemTray tray = SystemTray.getSystemTray();
+
+        // Icono simple morado — reemplaza con una imagen real si quieres
+        BufferedImage iconImg = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = iconImg.createGraphics();
+        g.setColor(new Color(100, 60, 200));
+        g.fillOval(0, 0, 16, 16);
+        g.dispose();
+
+        PopupMenu popup = new PopupMenu();
+
+        MenuItem toggleItem = new MenuItem(
+                isLocked ? "Desbloquear (recibir clicks)" : "Bloquear (pasar clicks)");
+        toggleItem.addActionListener(e -> {
+            isLocked = !isLocked;
+            clickThrough.setClickThrough(isLocked);
+            toggleItem.setLabel(
+                    isLocked ? "Desbloquear (recibir clicks)" : "Bloquear (pasar clicks)");
+        });
+
+        MenuItem exitItem = new MenuItem("Salir");
+        exitItem.addActionListener(e -> System.exit(0));
+
+        popup.add(toggleItem);
+        popup.addSeparator();
+        popup.add(exitItem);
+
+        trayIcon = new TrayIcon(iconImg, "Chat Overlay", popup);
+        trayIcon.setImageAutoSize(true);
+
+        try {
+            tray.add(trayIcon);
+        } catch (AWTException e) {
+            System.err.println("[Overlay] No se pudo añadir el icono a la bandeja.");
+        }
+    }
+        */
+
+    private void setupTrayIcon() {
+        SystemTray tray = SystemTray.getSystemTray();
+
+        BufferedImage iconImg = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = iconImg.createGraphics();
+        g.setColor(new Color(100, 60, 200));
+        g.fillOval(0, 0, 16, 16);
+        g.dispose();
+
+        // En Windows el PopupMenu del TrayIcon a veces falla,
+        // es más fiable usar un JPopupMenu propio
+        JPopupMenu popup = new JPopupMenu();
+
+        toggleItem = new JMenuItem(
+                isLocked ? "Desbloquear (recibir clicks)" : "Bloquear (pasar clicks)");
+        toggleItem.addActionListener(e -> {
+            isLocked = !isLocked;
+            if (clickThrough != null) {
+                clickThrough.setClickThrough(isLocked);
+            }
+            toggleItem.setText(
+                    isLocked ? "Desbloquear (recibir clicks)" : "Bloquear (pasar clicks)");
+        });
+
+        JMenuItem exitItem = new JMenuItem("Salir");
+        exitItem.addActionListener(e -> System.exit(0));
+
+        popup.add(toggleItem);
+        popup.addSeparator();
+        popup.add(exitItem);
+
+        trayIcon = new TrayIcon(iconImg, "Chat Overlay");
+        trayIcon.setImageAutoSize(true);
+
+        // Mostrar el JPopupMenu manualmente al hacer clic derecho
+        trayIcon.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getButton() == MouseEvent.BUTTON3) {
+                    showTrayPopup(popup, e.getX(), e.getY());
+                }
+                if (e.getButton() == MouseEvent.BUTTON1) {
+                    // Clic izquierdo: traer ventana al frente y darle foco
+                    SwingUtilities.invokeLater(() -> {
+                        setVisible(true);
+                        toFront();
+                        requestFocus();
+                    });
+                }
+            }
+        });
+
+        try {
+            tray.add(trayIcon);
+        } catch (AWTException e) {
+            System.err.println("[Overlay] No se pudo añadir el icono a la bandeja.");
+        }
+    }
+
+    private void showTrayPopup(JPopupMenu popup, int x, int y) {
+        // Ventana auxiliar invisible para anclar el popup
+        JWindow popupWindow = new JWindow();
+        popupWindow.setAlwaysOnTop(true);
+        popupWindow.setLocation(x, y);
+        popupWindow.setVisible(true);
+        popupWindow.setSize(1, 1);
+
+        popup.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {
+                popupWindow.dispose();
+            }
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {
+                popupWindow.dispose();
+            }
+            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {}
+        });
+
+        popup.show(popupWindow, 0, 0);
     }
 
     private void appendMessage(ChatMessage msg) {
@@ -101,17 +282,19 @@ public class ChatOverlay extends JFrame {
             }
 
             List<EmoteToken> tokens;
+            List<String> badgeUrls = null;
 
             if (msg.precomputedTokens() != null) {
                 // YouTube: tokens ya procesados en el reader
                 tokens = msg.precomputedTokens();
             } else {
-                // Twitch: procesar aquí
+                // Twitch: procesar emotes y badges aquí
                 tokens = twitchEmoteCache.tokenize(msg.emotesHeader(), msg.text());
                 tokens = bttvEmoteCache.process(tokens);
+                badgeUrls = badgeCache.getBadgeUrls(msg.badgesHeader());
             }
 
-            emoteRenderer.render(doc, msg.platform(), msg.user(), tokens);
+            emoteRenderer.render(doc, msg.platform(), msg.user(), tokens, badgeUrls);
             textPane.setCaretPosition(doc.getLength());
 
         } catch (BadLocationException e) {
@@ -119,19 +302,28 @@ public class ChatOverlay extends JFrame {
         }
     }
 
-    private void makeDraggable() {
+    private void makeDraggable(JComponent target) {
         final Point[] dragStart = {null};
-        addMouseListener(new MouseAdapter() {
-            public void mousePressed(MouseEvent e) { dragStart[0] = e.getPoint(); }
-        });
-        addMouseMotionListener(new MouseMotionAdapter() {
+
+        MouseAdapter dragAdapter = new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                dragStart[0] = e.getPoint();
+            }
+
+            @Override
             public void mouseDragged(MouseEvent e) {
                 if (dragStart[0] != null) {
                     Point loc = getLocation();
-                    setLocation(loc.x + e.getX() - dragStart[0].x,
-                                loc.y + e.getY() - dragStart[0].y);
+                    setLocation(
+                        loc.x + e.getX() - dragStart[0].x,
+                        loc.y + e.getY() - dragStart[0].y
+                    );
                 }
             }
-        });
+        };
+
+        target.addMouseListener(dragAdapter);
+        target.addMouseMotionListener(dragAdapter);
     }
 }

@@ -12,13 +12,15 @@ import java.util.concurrent.BlockingQueue;
 
 public class YouTubeChatReader implements Runnable {
 
-    private final String videoId;
+    private final String channelId;
+    private String videoId;
     private final String apiKey;
     private final BlockingQueue<ChatMessage> queue;
     private final YouTubeEmojiCache youtubeEmojiCache = new YouTubeEmojiCache();
 
-    public YouTubeChatReader(String videoId, String apiKey,
+    public YouTubeChatReader(String channelId, String videoId, String apiKey,
                              BlockingQueue<ChatMessage> queue) {
+        this.channelId = channelId;
         this.videoId = videoId;
         this.apiKey  = apiKey;
         this.queue   = queue;
@@ -45,28 +47,20 @@ public class YouTubeChatReader implements Runnable {
                 .build();
 
         // Obtener el liveChatId del vídeo
-        /*
-        YouTube.Search.List request = youtube.search().list(List.of("snippet"));
-        request.setEventType("live");          // 🔥 solo streams en directo
-        request.setType(List.of("video"));     // solo vídeos
-        request.setMaxResults(1L);            // cantidad de resultados
-        //request.setQ("gaming");                // opcional: filtrar por temática
-        request.setKey(apiKey);
+        SearchListResponse searchResponse = youtube.search()
+        .list(List.of("id"))
+        .setChannelId(channelId)
+        .setEventType("live")
+        .setType(List.of("video"))
+        .setKey(apiKey)
+        .execute();
 
-        SearchListResponse response = request.execute();
-
-        System.err.println(response);
-        // Sacar videoId de cada directo encontrado
-        for (SearchResult result : response.getItems()) {
-
-            String videoId = result.getId().getVideoId();
-            String title = result.getSnippet().getTitle();
-
-            System.err.println("Título: " + title);
-            System.err.println("Video ID: " + videoId);
-            System.err.println("-------------------------");
+        if (searchResponse.getItems().isEmpty()) {
+            System.err.println("[YouTube] No se encuentra directo, utilizando el videoId definido previamente.");
+            
+        } else {
+            videoId = searchResponse.getItems().get(0).getId().getVideoId();
         }
-         */
 
         VideoListResponse videoResponse = youtube.videos()
                 .list(List.of("liveStreamingDetails"))
@@ -110,7 +104,7 @@ public class YouTubeChatReader implements Runnable {
                 // Procesar emojis aquí donde tenemos el objeto completo
                 List<EmoteToken> tokens = youtubeEmojiCache.tokenize(item);
 
-                queue.put(new ChatMessage("youtube", user, text, null, tokens));
+                queue.put(new ChatMessage("youtube", user, text, tokens));
             }
 
             pageToken = chatResponse.getNextPageToken();

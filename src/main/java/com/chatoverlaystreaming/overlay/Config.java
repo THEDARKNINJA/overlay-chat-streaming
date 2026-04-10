@@ -30,6 +30,9 @@ public class Config {
 
     public String getTwitchChannel()   { return twitch.getString("channel");   }
     public String getTwitchChannelId() { return twitch.getString("channelId"); }
+    public String getTwitchClientId() { return twitch.getString("clientId"); }
+    public String getTwitchClientSecret() { return twitch.getString("clientSecret"); }
+    public String getYoutubeChannelId()  { return youtube.getString("channelId");  }
     public String getYoutubeVideoId()  { return youtube.getString("videoId");  }
     public String getYoutubeApiKey()   { return youtube.getString("apiKey");   }
     public int getPanelX()   { return panel.getInt("x");   }

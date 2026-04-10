@@ -53,22 +53,27 @@ public class TwitchChatReader implements Runnable {
             // Parsear mensajes PRIVMSG
             // Formato: :usuario!usuario@usuario.tmi.twitch.tv PRIVMSG #canal :mensaje
             if (line.contains("PRIVMSG")) {
-                // Extraer cabecera de emotes
+                // Extraer cabecera de emotes y badges
                 String emotesHeader = null;
+                String badgesHeader = null;
                 if (line.startsWith("@")) {
                     String tags = line.substring(1, line.indexOf(' '));
                     for (String tag : tags.split(";")) {
                         if (tag.startsWith("emotes=")) {
                             emotesHeader = tag.substring(7);
-                            break;
+                            //break;
+                        }
+                        if (tag.startsWith("badges=")) {
+                            badgesHeader = tag.substring(7);
                         }
                     }
                     line = line.substring(line.indexOf(' ') + 1);
                 }
+                
                 String user = line.substring(1, line.indexOf('!'));
                 String text = line.substring(line.indexOf("PRIVMSG #") +
                             ("PRIVMSG #" + channel + " :").length());
-                queue.put(new ChatMessage("twitch", user, text, emotesHeader));
+                queue.put(new ChatMessage("twitch", user, text, emotesHeader, badgesHeader));
             }
         }
     }

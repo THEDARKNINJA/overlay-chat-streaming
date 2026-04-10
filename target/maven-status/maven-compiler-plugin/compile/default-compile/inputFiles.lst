@@ -1,6 +1,7 @@
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\BTTVEmoteCache.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\EmoteRenderer.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\ImageCache.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\TwitchBadgeCache.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\TwitchEmoteCache.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\YouTubeEmojiCache.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\Main.java
@@ -8,5 +9,6 @@ E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\model\ChatMessa
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\model\EmoteToken.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\ChatOverlay.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\Config.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\WindowClickThrough.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\readers\TwitchChatReader.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\readers\YouTubeChatReader.java

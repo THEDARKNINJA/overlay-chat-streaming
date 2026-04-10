@@ -1,6 +1,5 @@
 package com.chatoverlaystreaming.model;
 
-import com.chatoverlaystreaming.model.EmoteToken;
 import java.util.List;
 
 public record ChatMessage(
@@ -8,15 +7,23 @@ public record ChatMessage(
     String user,
     String text,
     String emotesHeader,
+    String badgesHeader,
     List<EmoteToken> precomputedTokens
 ) {
-    // Constructor para Twitch (sin tokens precomputados)
-    public ChatMessage(String platform, String user, String text, String emotesHeader) {
-        this(platform, user, text, emotesHeader, null);
+    // Constructor para Twitch
+    public ChatMessage(String platform, String user, String text,
+                       String emotesHeader, String badgesHeader) {
+        this(platform, user, text, emotesHeader, badgesHeader, null);
     }
 
-    // Constructor para texto plano sin nada extra
+    // Constructor para YouTube
+    public ChatMessage(String platform, String user, String text,
+                       List<EmoteToken> precomputedTokens) {
+        this(platform, user, text, null, null, precomputedTokens);
+    }
+
+    // Constructor básico sin nada extra
     public ChatMessage(String platform, String user, String text) {
-        this(platform, user, text, null, null);
+        this(platform, user, text, null, null, null);
     }
 }

@@ -31,7 +31,8 @@ public class Main {
         twitchThread.start();
 
         Thread youtubeThread = new Thread(
-                new YouTubeChatReader(config.getYoutubeVideoId(),
+                new YouTubeChatReader(config.getYoutubeChannelId(),
+                                      config.getYoutubeVideoId(),
                                       config.getYoutubeApiKey(), queue),
                 "youtube-reader");
         youtubeThread.setDaemon(true);
@@ -39,9 +40,15 @@ public class Main {
 
         // Lanzar interfaz
         SwingUtilities.invokeLater(() -> {
-            ChatOverlay overlay = new ChatOverlay(queue, config.getTwitchChannelId(),
-                                                  config.getPanelX(), config.getPanelY(), config.getPanelWidth(), config.getPanelHeight());
-            overlay.setVisible(true);
+            ChatOverlay overlay = new ChatOverlay(
+                    queue,
+                    config.getTwitchChannelId(),
+                    config.getTwitchClientId(),
+                    config.getTwitchClientSecret(),
+                    config.getPanelX(), config.getPanelY(), config.getPanelWidth(), config.getPanelHeight()
+                );
+                overlay.setVisible(true);
+                overlay.initNativeFeatures();
         });
     }
 }
