@@ -21,6 +21,7 @@ com\chatoverlaystreaming\overlay\ChatOverlay$6.class
 com\chatoverlaystreaming\emotes\TwitchBadgeCache.class
 com\chatoverlaystreaming\model\EmoteToken$Text.class
 com\chatoverlaystreaming\overlay\WindowClickThrough.class
+com\chatoverlaystreaming\overlay\WindowClickThrough$User32Extra.class
 com\chatoverlaystreaming\emotes\ImageCache.class
 com\chatoverlaystreaming\overlay\ChatOverlay$8.class
 com\chatoverlaystreaming\overlay\ChatOverlay$3.class

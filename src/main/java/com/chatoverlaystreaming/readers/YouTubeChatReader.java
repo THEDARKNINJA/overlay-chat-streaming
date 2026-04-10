@@ -39,6 +39,8 @@ public class YouTubeChatReader implements Runnable {
     }
 
     private void connect() throws Exception {
+        if(true)
+            return;
         YouTube youtube = new YouTube.Builder(
                 new NetHttpTransport(),
                 JacksonFactory.getDefaultInstance(),

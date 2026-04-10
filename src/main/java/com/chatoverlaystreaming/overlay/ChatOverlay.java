@@ -43,7 +43,8 @@ public class ChatOverlay extends JFrame {
                        Config config) {
 
         setUndecorated(true);
-        setBackground(new Color(0, 0, 0, 0));
+        //setBackground(new Color(0, 0, 0, 0));
+        setBackground(Color.MAGENTA);
         setAlwaysOnTop(true);
         setType(Window.Type.NORMAL);
         setSize(config.getPanelWidth(), config.getPanelHeight());
@@ -84,12 +85,18 @@ public class ChatOverlay extends JFrame {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setColor(new Color(10, 10, 10, config.getPanelAlpha()));
+               // g2.setColor(new Color(10, 10, 10, config.getPanelAlpha()));
+                        g2.setColor(Color.MAGENTA);
+                        g2.fillRect(0, 0, getWidth(), getHeight());
+                        // Luego pintar el fondo semitransparente del chat
+                        // Ojo: sin alpha, color sólido
+                        g2.setColor(new Color(10, 10, 10));
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
                 g2.dispose();
             }
         };
-        panel.setOpaque(false);
+        //panel.setOpaque(false);
+        panel.setOpaque(true);
 
         // Barra de arrastre en la parte superior
         dragBar = new JPanel() {
@@ -192,17 +199,23 @@ public class ChatOverlay extends JFrame {
      * Inicializa el click-through y el icono de bandeja.
      */
     public void initNativeFeatures() {
-        try {
-            clickThrough = new WindowClickThrough(this);
-            clickThrough.setClickThrough(isLocked);
-        } catch (Exception e) {
-            System.err.println("[Overlay] Click-through no disponible: " + e.getMessage());
-        }
+        // Esperar a que la ventana esté completamente inicializada
+        SwingUtilities.invokeLater(() -> {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ignored) {}
+
+            try {
+                clickThrough = new WindowClickThrough(this);
+                clickThrough.setClickThrough(isLocked);
+                clickThrough.setExcludeFromCapture(true);
+            } catch (Exception e) {
+                System.err.println("[Overlay] Funciones nativas no disponibles: " + e.getMessage());
+            }
+        });
 
         if (SystemTray.isSupported()) {
             setupTrayIcon();
-        } else {
-            System.err.println("[Overlay] La bandeja del sistema no está soportada.");
         }
     }
 
@@ -258,6 +271,17 @@ public class ChatOverlay extends JFrame {
         // En Windows el PopupMenu del TrayIcon a veces falla,
         // es más fiable usar un JPopupMenu propio
         JPopupMenu popup = new JPopupMenu();
+
+        JMenuItem captureItem = new JMenuItem("Permitir captura de pantalla");
+        captureItem.addActionListener(e -> {
+            boolean currentlyExcluded = true; // podrías guardarlo como campo
+            // toggle
+            clickThrough.setExcludeFromCapture(!currentlyExcluded);
+            captureItem.setText(currentlyExcluded
+                ? "Excluir de captura de pantalla"
+                : "Permitir captura de pantalla");
+        });
+        popup.add(captureItem);
 
         toggleItem = new JMenuItem(
                 isLocked ? "Desbloquear (recibir clicks)" : "Bloquear (pasar clicks)");
