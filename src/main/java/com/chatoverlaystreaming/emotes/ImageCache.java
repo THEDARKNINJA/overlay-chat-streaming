@@ -11,7 +11,7 @@ import java.util.Map;
 public class ImageCache {
 
     private static final int MAX_SIZE    = 300;
-    private static final int EMOTE_PX   = 24; // tamaño de renderizado
+    private static final int EMOTE_HEIGHT   = 16; // tamaño de renderizado
 
     private final Map<String, ImageIcon> cache = new LinkedHashMap<>(MAX_SIZE, 0.75f, true) {
         @Override
@@ -24,11 +24,30 @@ public class ImageCache {
         return cache.computeIfAbsent(url, this::download);
     }
 
+    /*
     private ImageIcon download(String url) {
         try {
             BufferedImage img = ImageIO.read(URI.create(url).toURL());
             if (img == null) return null;
             Image scaled = img.getScaledInstance(EMOTE_PX, EMOTE_PX, Image.SCALE_SMOOTH);
+            return new ImageIcon(scaled);
+        } catch (Exception e) {
+            System.err.println("[ImageCache] No se pudo descargar: " + url);
+            return null;
+        }
+    }
+        */
+    private ImageIcon download(String url) {
+        try {
+            BufferedImage img = ImageIO.read(URI.create(url).toURL());
+            if (img == null) return null;
+
+            // Calcular ancho proporcional
+            int originalWidth  = img.getWidth();
+            int originalHeight = img.getHeight();
+            int scaledWidth = (int) ((double) originalWidth / originalHeight * EMOTE_HEIGHT);
+
+            Image scaled = img.getScaledInstance(scaledWidth, EMOTE_HEIGHT, Image.SCALE_SMOOTH);
             return new ImageIcon(scaled);
         } catch (Exception e) {
             System.err.println("[ImageCache] No se pudo descargar: " + url);

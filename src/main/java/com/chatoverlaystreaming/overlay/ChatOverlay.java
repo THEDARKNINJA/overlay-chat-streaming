@@ -11,6 +11,7 @@ import javax.swing.event.PopupMenuEvent;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
@@ -28,20 +29,50 @@ public class ChatOverlay extends JFrame {
     private WindowClickThrough clickThrough;
     private TrayIcon trayIcon;
     private JMenuItem toggleItem;
+    private JPanel dragBar;
     private boolean isLocked = true;
+    private boolean hasFocus = false;
+
+    private final Config config;
+    private javax.swing.Timer saveTimer;
 
     public ChatOverlay(BlockingQueue<ChatMessage> queue,
                        String twitchChannelId,
                        String twitchClientId,
                        String twitchClientSecret, 
-                       int x_panel, int y_panel, int width_panel, int height_panel) {
+                       Config config) {
 
         setUndecorated(true);
         setBackground(new Color(0, 0, 0, 0));
         setAlwaysOnTop(true);
         setType(Window.Type.NORMAL);
-        setSize(380, 500);
-        setLocation(20, 200);
+        setSize(config.getPanelWidth(), config.getPanelHeight());
+        setLocation(config.getPanelX(), config.getPanelY());
+
+        this.config = config;
+        saveTimer = new javax.swing.Timer(500, e -> {
+            try {
+                Point loc  = getLocation();
+                Dimension d = getSize();
+                config.savePanel(loc.x, loc.y, d.width, d.height);
+            } catch (IOException ex) {
+                System.err.println("[Config] Error guardando posición: " + ex.getMessage());
+            }
+        });
+        saveTimer.setRepeats(false); // solo dispara una vez por movimiento
+
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentMoved(ComponentEvent e) {
+                // Reiniciar el temporizador cada vez que se mueve
+                saveTimer.restart();
+            }
+
+            @Override
+            public void componentResized(ComponentEvent e) {
+                saveTimer.restart();
+            }
+        });
 
         bttvEmoteCache = new BTTVEmoteCache(twitchChannelId);
         badgeCache     = new TwitchBadgeCache(twitchClientId,
@@ -53,7 +84,7 @@ public class ChatOverlay extends JFrame {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setColor(new Color(10, 10, 10, 160));
+                g2.setColor(new Color(10, 10, 10, config.getPanelAlpha()));
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
                 g2.dispose();
             }
@@ -61,14 +92,25 @@ public class ChatOverlay extends JFrame {
         panel.setOpaque(false);
 
         // Barra de arrastre en la parte superior
-        JPanel dragBar = new JPanel() {
+        dragBar = new JPanel() {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setColor(new Color(40, 40, 40, 180));
+
+                // Color según foco: morado si tiene foco, gris oscuro si no
+                Color barColor = hasFocus
+                    ? new Color(100, 60, 200, 170)
+                    : new Color(40, 40, 40, 140);
+
+                g2.setColor(barColor);
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+
                 // Tres puntitos para indicar que es arrastrable
-                g2.setColor(new Color(150, 150, 150, 200));
+                // Puntitos
+                Color dotColor = hasFocus
+                    ? new Color(220, 200, 255, 200)
+                    : new Color(150, 150, 150, 180);
+                g2.setColor(dotColor);
                 int cx = getWidth() / 2;
                 int cy = getHeight() / 2;
                 g2.fillOval(cx - 12, cy - 2, 5, 5);
@@ -78,7 +120,7 @@ public class ChatOverlay extends JFrame {
             }
         };
         dragBar.setOpaque(false);
-        dragBar.setPreferredSize(new Dimension(0, 20));
+        dragBar.setPreferredSize(new Dimension(0, 15));
         makeDraggable(dragBar);
 
         // Área de texto
@@ -87,6 +129,15 @@ public class ChatOverlay extends JFrame {
         textPane.setOpaque(false);
         textPane.setBackground(new Color(0, 0, 0, 0));
         textPane.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 13));
+        MutableAttributeSet lineSpacing = new SimpleAttributeSet();
+        StyleConstants.setLineSpacing(lineSpacing, 0.3f); // 30% extra entre líneas
+        textPane.setParagraphAttributes(lineSpacing, false);
+        //hacer que cuando tiene el foco no sea visible el caret (marca de introducir texto)
+        textPane.setCaret(new DefaultCaret() {
+            @Override public void paint(Graphics g) {}
+            @Override public boolean isVisible() { return false; }
+            @Override public boolean isSelectionVisible() { return false; }
+        });
         doc = textPane.getStyledDocument();
 
         JScrollPane scroll = new JScrollPane(textPane);
@@ -116,18 +167,22 @@ public class ChatOverlay extends JFrame {
         addWindowFocusListener(new WindowFocusListener() {
             @Override
             public void windowGainedFocus(WindowEvent e) {
+                hasFocus = true;
                 isLocked = false;
                 if (clickThrough != null) {
                     clickThrough.setClickThrough(false);
                 }
+                dragBar.repaint();
             }
 
             @Override
             public void windowLostFocus(WindowEvent e) {
+                hasFocus = false;
                 isLocked = true;
                 if (clickThrough != null) {
                     clickThrough.setClickThrough(true);
                 }
+                dragBar.repaint();
             }
         });
     }
@@ -294,7 +349,7 @@ public class ChatOverlay extends JFrame {
                 badgeUrls = badgeCache.getBadgeUrls(msg.badgesHeader());
             }
 
-            emoteRenderer.render(doc, msg.platform(), msg.user(), tokens, badgeUrls);
+            emoteRenderer.render(doc, msg.platform(), msg.user(), tokens, badgeUrls, msg.userColor());
             textPane.setCaretPosition(doc.getLength());
 
         } catch (BadLocationException e) {

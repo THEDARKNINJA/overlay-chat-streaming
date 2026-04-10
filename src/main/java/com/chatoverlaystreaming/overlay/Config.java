@@ -8,6 +8,7 @@ import java.nio.file.Paths;
 
 public class Config {
 
+    private final JSONObject root;
     private final JSONObject twitch;
     private final JSONObject youtube;
     private final JSONObject panel;
@@ -21,7 +22,7 @@ public class Config {
             );
         }
         String content = Files.readString(configPath);
-        JSONObject root = new JSONObject(content);
+        root = new JSONObject(content);
         twitch  = root.getJSONObject("twitch");
         youtube = root.getJSONObject("youtube");
         panel = root.getJSONObject("panel");
@@ -39,4 +40,21 @@ public class Config {
     public int getPanelY()   { return panel.getInt("y");   }
     public int getPanelWidth()   { return panel.getInt("width");   }
     public int getPanelHeight()   { return panel.getInt("height");   }
+    public int getPanelAlpha()   { return panel.getInt("alpha");   }
+
+    public void savePanel(int x, int y, int width, int height) throws IOException {
+        // Actualizar los valores en el objeto JSON en memoria
+        JSONObject panel = root.getJSONObject("panel");
+        panel.put("x", x);
+        panel.put("y", y);
+        panel.put("width", width);
+        panel.put("height", height);
+        panel.put("alpha", getPanelAlpha());
+
+        // Escribir al disco con formato legible
+        Files.writeString(
+            Paths.get("config.json"),
+            root.toString(2)  // el 2 es la indentación
+        );
+    }
 }

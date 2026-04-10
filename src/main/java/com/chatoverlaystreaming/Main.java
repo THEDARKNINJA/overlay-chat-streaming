@@ -45,7 +45,7 @@ public class Main {
                     config.getTwitchChannelId(),
                     config.getTwitchClientId(),
                     config.getTwitchClientSecret(),
-                    config.getPanelX(), config.getPanelY(), config.getPanelWidth(), config.getPanelHeight()
+                    config
                 );
                 overlay.setVisible(true);
                 overlay.initNativeFeatures();

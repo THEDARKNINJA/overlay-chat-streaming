@@ -18,6 +18,7 @@ public class EmoteRenderer {
     private static final Color USER_COLOR    = new Color(200, 200, 200);
     private static final Color TEXT_COLOR    = new Color(240, 240, 240);
     private static final Font  CHAT_FONT     = new Font("Segoe UI Emoji", Font.PLAIN, 13);
+    private static final int LINE_HEIGHT = 28; // altura de línea
 
     private final ImageIcon TWITCH_ICON;
     private final ImageIcon YOUTUBE_ICON;
@@ -48,24 +49,13 @@ public class EmoteRenderer {
                        String platform,
                        String username,
                        List<EmoteToken> tokens,
-                       List<String> badgeUrls) throws BadLocationException {
+                       List<String> badgeUrls,
+                       String userColor) throws BadLocationException {
 
         // Estilo base compartido
         SimpleAttributeSet baseStyle = new SimpleAttributeSet();
         StyleConstants.setFontFamily(baseStyle, CHAT_FONT.getFamily());
         StyleConstants.setFontSize(baseStyle, CHAT_FONT.getSize());
-
-        // -- Badges de Twitch --
-        if (badgeUrls != null && !badgeUrls.isEmpty()) {
-            for (String badgeUrl : badgeUrls) {
-                ImageIcon badge = imageCache.get(badgeUrl);
-                if (badge != null) {
-                    insertIcon(doc, badge, "badge", baseStyle);
-                    // Pequeño espacio después de cada badge
-                    doc.insertString(doc.getLength(), " ", baseStyle);
-                }
-            }
-        }
 
         // -- Icono de plataforma --
         SimpleAttributeSet platformStyle = new SimpleAttributeSet(baseStyle);
@@ -83,9 +73,22 @@ public class EmoteRenderer {
             doc.insertString(doc.getLength(), tag, platformStyle);
         }
 
+        // -- Badges de Twitch --
+        if (badgeUrls != null && !badgeUrls.isEmpty()) {
+            for (String badgeUrl : badgeUrls) {
+                ImageIcon badge = imageCache.get(badgeUrl);
+                if (badge != null) {
+                    insertIcon(doc, badge, "badge", baseStyle);
+                    // Pequeño espacio después de cada badge
+                    doc.insertString(doc.getLength(), " ", baseStyle);
+                }
+            }
+        }
+
         // -- Nombre de usuario --
+        Color nameColor = resolveUserColor(userColor, username);
         SimpleAttributeSet userStyle = new SimpleAttributeSet(baseStyle);
-        StyleConstants.setForeground(userStyle, USER_COLOR);
+        StyleConstants.setForeground(userStyle, nameColor);
         StyleConstants.setBold(userStyle, true);
         doc.insertString(doc.getLength(), username + ": ", userStyle);
 
@@ -114,11 +117,38 @@ public class EmoteRenderer {
         doc.insertString(doc.getLength(), "\n", textStyle);
     }
 
+    private Color resolveUserColor(String hexColor, String username) {
+        if (hexColor != null && hexColor.startsWith("#") && hexColor.length() == 7) {
+            try {
+                return Color.decode(hexColor);
+            } catch (NumberFormatException ignored) {}
+        }
+        // Color generado a partir del nombre, siempre el mismo para el mismo usuario
+        return generateColorFromName(username);
+    }
+
+    private Color generateColorFromName(String name) {
+        // Paleta de colores legibles sobre fondo oscuro
+        Color[] palette = {
+            new Color(255, 100, 100),  // rojo suave
+            new Color(100, 200, 255),  // azul claro
+            new Color(100, 255, 150),  // verde claro
+            new Color(255, 200,  80),  // amarillo
+            new Color(200, 130, 255),  // morado
+            new Color(255, 150,  80),  // naranja
+            new Color( 80, 220, 200),  // turquesa
+            new Color(255, 120, 180),  // rosa
+        };
+        int index = Math.abs(name.hashCode()) % palette.length;
+        return palette[index];
+    }
+
     private void insertIcon(StyledDocument doc, ImageIcon icon,
                             String altText, AttributeSet baseStyle)
             throws BadLocationException {
+        CenteredIcon centered = new CenteredIcon(icon, LINE_HEIGHT);
         Style iconStyle = doc.addStyle(altText + System.nanoTime(), null);
-        StyleConstants.setIcon(iconStyle, icon);
+        StyleConstants.setIcon(iconStyle, centered);
         doc.insertString(doc.getLength(), " ", iconStyle);
     }
 }

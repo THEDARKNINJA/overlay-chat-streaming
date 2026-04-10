@@ -56,16 +56,13 @@ public class TwitchChatReader implements Runnable {
                 // Extraer cabecera de emotes y badges
                 String emotesHeader = null;
                 String badgesHeader = null;
+                String userColor = null;
                 if (line.startsWith("@")) {
                     String tags = line.substring(1, line.indexOf(' '));
                     for (String tag : tags.split(";")) {
-                        if (tag.startsWith("emotes=")) {
-                            emotesHeader = tag.substring(7);
-                            //break;
-                        }
-                        if (tag.startsWith("badges=")) {
-                            badgesHeader = tag.substring(7);
-                        }
+                        if (tag.startsWith("emotes=")) emotesHeader = tag.substring(7);
+                        if (tag.startsWith("badges=")) badgesHeader = tag.substring(7);
+                        if (tag.startsWith("color="))  userColor    = tag.substring(6);
                     }
                     line = line.substring(line.indexOf(' ') + 1);
                 }
@@ -73,7 +70,7 @@ public class TwitchChatReader implements Runnable {
                 String user = line.substring(1, line.indexOf('!'));
                 String text = line.substring(line.indexOf("PRIVMSG #") +
                             ("PRIVMSG #" + channel + " :").length());
-                queue.put(new ChatMessage("twitch", user, text, emotesHeader, badgesHeader));
+                queue.put(new ChatMessage("twitch", user, text, emotesHeader, badgesHeader, userColor));
             }
         }
     }
