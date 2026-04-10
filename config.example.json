@@ -11,10 +11,12 @@
     "apiKey": "TU_API_KEY"
   },
   "panel": {
-    "x": 20,
-    "y": 200,
+    "alpha": 100,
+    "showBackground": true,
+    "x": 1441,
     "width": 380,
+    "y": 408,
     "height": 450,
-    "alpha": 160
+    "iconSize": 16
   }
 }

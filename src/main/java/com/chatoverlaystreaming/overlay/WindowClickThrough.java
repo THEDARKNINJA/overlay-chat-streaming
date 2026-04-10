@@ -71,7 +71,7 @@ public class WindowClickThrough {
 
         int affinity = exclude ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE;
         boolean result = User32Extra.INSTANCE.SetWindowDisplayAffinity(hwnd, affinity);
-        System.out.println("[Overlay] SetWindowDisplayAffinity resultado: " + result);
+        //System.out.println("[Overlay] SetWindowDisplayAffinity resultado: " + result);
     }
 
     public boolean isClickThrough() {

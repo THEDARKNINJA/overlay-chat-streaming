@@ -12,80 +12,154 @@ import java.util.concurrent.BlockingQueue;
 
 public class YouTubeChatReader implements Runnable {
 
+    private static final long RETRY_INTERVAL = 300000; // 5 minutos
+
     private final String channelId;
-    private String videoId;
+    private final String configVideoId;
     private final String apiKey;
     private final BlockingQueue<ChatMessage> queue;
     private final YouTubeEmojiCache youtubeEmojiCache = new YouTubeEmojiCache();
+    private YouTube youtube;
 
     public YouTubeChatReader(String channelId, String videoId, String apiKey,
                              BlockingQueue<ChatMessage> queue) {
-        this.channelId = channelId;
-        this.videoId = videoId;
-        this.apiKey  = apiKey;
-        this.queue   = queue;
+        this.channelId     = channelId;
+        this.configVideoId = videoId;
+        this.apiKey        = apiKey;
+        this.queue         = queue;
     }
 
     @Override
     public void run() {
-        while (!Thread.currentThread().isInterrupted()) {
-            try {
-                connect();
-            } catch (Exception e) {
-                System.err.println("[YouTube] Error: " + e.getMessage() + " — reconectando en 10s");
-                sleep(10000);
-            }
-        }
-    }
-
-    private void connect() throws Exception {
-        if(true)
-            return;
-        YouTube youtube = new YouTube.Builder(
+        
+        youtube = new YouTube.Builder(
                 new NetHttpTransport(),
                 JacksonFactory.getDefaultInstance(),
                 request -> {})
                 .setApplicationName("ChatOverlay")
                 .build();
 
-        // Obtener el liveChatId del vídeo
-        SearchListResponse searchResponse = youtube.search()
-        .list(List.of("id"))
-        .setChannelId(channelId)
-        .setEventType("live")
-        .setType(List.of("video"))
-        .setKey(apiKey)
-        .execute();
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                String liveChatId = resolveLiveChatId();
 
-        if (searchResponse.getItems().isEmpty()) {
-            System.err.println("[YouTube] No se encuentra directo, utilizando el videoId definido previamente.");
-            
-        } else {
-            videoId = searchResponse.getItems().get(0).getId().getVideoId();
+                if (liveChatId == null) {
+                    // Ninguna opción funcionó, avisar en el chat y esperar
+                    postSystemMessage("YouTube: no se encontró ningún directo activo. " +
+                                      "Reintentando en 5 minutos...");
+                    sleep(RETRY_INTERVAL);
+                    continue;
+                }
+
+                readChat(liveChatId);
+
+            } catch (Exception e) {
+                System.err.println("[YouTube] Error inesperado: " + e.getMessage());
+                postSystemMessage("YouTube: error de conexión. Reintentando en 5 minutos...");
+                sleep(RETRY_INTERVAL);
+            }
+        }
+    }
+
+    /**
+     * Intenta resolver el liveChatId siguiendo esta prioridad:
+     * 1. videoId del config, si existe y tiene chat activo
+     * 2. Búsqueda del directo activo en el canal
+     * Devuelve null si ninguna opción funciona.
+     */
+    private String resolveLiveChatId() {
+        // Paso 1: intentar con el videoId del config
+        System.err.println("[YouTube] Resolviendo el liveChatid");
+        if (configVideoId != null && !configVideoId.isBlank()) {
+            String chatId = getLiveChatId(configVideoId);
+            if (chatId != null) {
+                System.out.println("[YouTube] Conectado usando videoId del config.");
+                return chatId;
+            }
+            System.out.println("[YouTube] videoId del config no tiene chat activo, buscando directo...");
         }
 
-        VideoListResponse videoResponse = youtube.videos()
-                .list(List.of("liveStreamingDetails"))
-                .setId(List.of(videoId))
-                .setKey(apiKey)
-                .execute();
-
-        if (videoResponse.getItems().isEmpty()) {
-            System.err.println("[YouTube] Vídeo no encontrado: " + videoId);
-            return;
+        // Paso 2: buscar directo activo en el canal
+        if (channelId != null && !channelId.isBlank()) {
+            String foundVideoId = searchLiveVideo();
+            if (foundVideoId != null) {
+                String chatId = getLiveChatId(foundVideoId);
+                if (chatId != null) {
+                    System.out.println("[YouTube] Directo encontrado: " + foundVideoId);
+                    return chatId;
+                }
+            }
         }
 
-        String liveChatId = videoResponse.getItems().get(0)
-                .getLiveStreamingDetails().getActiveLiveChatId();
+        return null;
+    }
 
-        if (liveChatId == null) {
-            System.err.println("[YouTube] El vídeo no tiene chat en directo activo.");
-            return;
+    /**
+     * Dado un videoId, devuelve su liveChatId si tiene chat activo.
+     * Devuelve null si el vídeo no existe, no está en directo o no tiene chat.
+     */
+    private String getLiveChatId(String videoId) {
+        try {
+            VideoListResponse response = youtube.videos()
+                    .list(List.of("liveStreamingDetails"))
+                    .setId(List.of(videoId))
+                    .setKey(apiKey)
+                    .execute();
+
+            if (response.getItems().isEmpty()) {
+                System.err.println("[YouTube] videoId no encontrado: " + videoId);
+                return null;
+            }
+
+            String chatId = response.getItems().get(0)
+                    .getLiveStreamingDetails().getActiveLiveChatId();
+
+            if (chatId == null) {
+                System.err.println("[YouTube] El vídeo no tiene chat activo: " + videoId);
+            }
+
+            return chatId;
+
+        } catch (Exception e) {
+            System.err.println("[YouTube] Error consultando videoId " + videoId + ": " + e.getMessage());
+            return null;
         }
+    }
 
-        System.out.println("[YouTube] Conectado al chat: " + liveChatId);
+    /**
+     * Busca el directo activo del canal y devuelve su videoId.
+     * Devuelve null si no hay ningún directo activo.
+     */
+    private String searchLiveVideo() {
+        try {
+            SearchListResponse response = youtube.search()
+                    .list(List.of("id"))
+                    .setChannelId(channelId)
+                    .setEventType("live")
+                    .setType(List.of("video"))
+                    .setKey(apiKey)
+                    .execute();
 
+            if (response.getItems().isEmpty()) {
+                System.err.println("[YouTube] No hay directo activo en el canal.");
+                return null;
+            }
+
+            return response.getItems().get(0).getId().getVideoId();
+
+        } catch (Exception e) {
+            System.err.println("[YouTube] Error buscando directo: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Lee el chat en bucle hasta que se pierda la conexión o el directo termine.
+     */
+    private void readChat(String liveChatId) throws Exception {
+        System.out.println("[YouTube] Leyendo chat: " + liveChatId);
         String pageToken = null;
+
         while (!Thread.currentThread().isInterrupted()) {
             LiveChatMessageListResponse chatResponse = youtube.liveChatMessages()
                     .list(liveChatId, List.of("snippet", "authorDetails"))
@@ -98,20 +172,25 @@ public class YouTubeChatReader implements Runnable {
                 if (!"textMessageEvent".equals(item.getSnippet().getType())) {
                     continue;
                 }
-
                 String user = item.getAuthorDetails().getDisplayName();
-                String text = item.getSnippet()
-                        .getTextMessageDetails().getMessageText();
-
-                // Procesar emojis aquí donde tenemos el objeto completo
+                String text = item.getSnippet().getTextMessageDetails().getMessageText();
                 List<EmoteToken> tokens = youtubeEmojiCache.tokenize(item);
-
                 queue.put(new ChatMessage("youtube", user, text, tokens));
             }
 
             pageToken = chatResponse.getNextPageToken();
-            long pollingInterval = chatResponse.getPollingIntervalMillis();
-            sleep(pollingInterval);
+            sleep(chatResponse.getPollingIntervalMillis());
+        }
+    }
+
+    /**
+     * Inserta un mensaje de sistema en el chat del overlay.
+     */
+    private void postSystemMessage(String text) {
+        try {
+            queue.put(new ChatMessage("youtube", "⚠ Sistema", text));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

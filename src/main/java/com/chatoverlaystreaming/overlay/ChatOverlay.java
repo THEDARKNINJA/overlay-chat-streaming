@@ -24,12 +24,13 @@ public class ChatOverlay extends JFrame {
     private final TwitchEmoteCache  twitchEmoteCache = new TwitchEmoteCache();
     private final BTTVEmoteCache    bttvEmoteCache;
     private final TwitchBadgeCache  badgeCache;
-    private final EmoteRenderer     emoteRenderer    = new EmoteRenderer();
-
+    private final EmoteRenderer     emoteRenderer;
     private WindowClickThrough clickThrough;
     private TrayIcon trayIcon;
     private JMenuItem toggleItem;
     private JPanel dragBar;
+    private Rectangle closeButtonRect = new Rectangle();
+    private boolean showBackground;
     private boolean isLocked = true;
     private boolean hasFocus = false;
 
@@ -42,6 +43,8 @@ public class ChatOverlay extends JFrame {
                        String twitchClientSecret, 
                        Config config) {
 
+        this.config = config;
+
         setUndecorated(true);
         //setBackground(new Color(0, 0, 0, 0));
         setBackground(Color.MAGENTA);
@@ -49,8 +52,9 @@ public class ChatOverlay extends JFrame {
         setType(Window.Type.NORMAL);
         setSize(config.getPanelWidth(), config.getPanelHeight());
         setLocation(config.getPanelX(), config.getPanelY());
-
-        this.config = config;
+        this.showBackground = config.getShowBackground();
+        emoteRenderer    = new EmoteRenderer(config.getIconSize());
+        
         saveTimer = new javax.swing.Timer(500, e -> {
             try {
                 Point loc  = getLocation();
@@ -82,7 +86,7 @@ public class ChatOverlay extends JFrame {
 
         // Panel principal con fondo semitransparente
         JPanel panel = new JPanel(new BorderLayout()) {
-            @Override
+            @Override /*
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                // g2.setColor(new Color(10, 10, 10, config.getPanelAlpha()));
@@ -94,6 +98,22 @@ public class ChatOverlay extends JFrame {
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
                 g2.dispose();
             }
+                */
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                if (showBackground) {
+                    // Modo con fondo: magenta en esquinas + rectángulo oscuro
+                    g2.setColor(Color.MAGENTA);
+                    g2.fillRect(0, 0, getWidth(), getHeight());
+                    g2.setColor(new Color(10, 10, 10));
+                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
+                } else {
+                    // Modo sin fondo: todo magenta, solo texto visible
+                    g2.setColor(Color.MAGENTA);
+                    g2.fillRect(0, 0, getWidth(), getHeight());
+                }
+                g2.dispose();
+            }
         };
         //panel.setOpaque(false);
         panel.setOpaque(true);
@@ -102,7 +122,10 @@ public class ChatOverlay extends JFrame {
         dragBar = new JPanel() {
             @Override
             protected void paintComponent(Graphics g) {
+                if (!hasFocus) return; // si no tiene foco, no pintar nada
                 Graphics2D g2 = (Graphics2D) g.create();
+
+                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
                 // Color según foco: morado si tiene foco, gris oscuro si no
                 Color barColor = hasFocus
@@ -123,6 +146,27 @@ public class ChatOverlay extends JFrame {
                 g2.fillOval(cx - 12, cy - 2, 5, 5);
                 g2.fillOval(cx - 2,  cy - 2, 5, 5);
                 g2.fillOval(cx + 8,  cy - 2, 5, 5);
+
+                        // Botón X a la derecha
+        int size = 14;
+        int margin = 3;
+        int bx = getWidth() - size - margin;
+        int by = (getHeight() - size) / 2;
+        closeButtonRect.setBounds(bx, by, size, size);
+
+        // Fondo del botón X
+        g2.setColor(new Color(180, 60, 60, 200));
+        g2.fillRoundRect(bx, by, size, size, 4, 4);
+
+        // La X
+        g2.setColor(new Color(255, 255, 255, 230));
+        g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        int padding = 3;
+        g2.drawLine(bx + padding, by + padding,
+                    bx + size - padding, by + size - padding);
+        g2.drawLine(bx + size - padding, by + padding,
+                    bx + padding, by + size - padding);
+
                 g2.dispose();
             }
         };
@@ -150,8 +194,11 @@ public class ChatOverlay extends JFrame {
         JScrollPane scroll = new JScrollPane(textPane);
         scroll.setOpaque(false);
         scroll.getViewport().setOpaque(false);
-        scroll.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        scroll.setBorder(BorderFactory.createEmptyBorder(8, 8, 0, 8));
         scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.getVerticalScrollBar().setPreferredSize(new Dimension(0, 0));
+        scroll.getHorizontalScrollBar().setPreferredSize(new Dimension(0, 0));
 
         panel.add(dragBar, BorderLayout.NORTH);
         panel.add(scroll,  BorderLayout.CENTER);
@@ -190,6 +237,15 @@ public class ChatOverlay extends JFrame {
                     clickThrough.setClickThrough(true);
                 }
                 dragBar.repaint();
+            }
+        });
+
+        dragBar.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (closeButtonRect.contains(e.getPoint())) {
+                    System.exit(0);
+                }
             }
         });
     }
@@ -321,6 +377,21 @@ public class ChatOverlay extends JFrame {
                 }
             }
         });
+        JMenuItem bgItem = new JMenuItem(showBackground ? "Quitar fondo" : "Mostrar fondo");
+        bgItem.addActionListener(e -> {
+            showBackground = !showBackground;
+            bgItem.setText(showBackground ? "Quitar fondo" : "Mostrar fondo");
+            // Guardar en config
+            try {
+                Point loc = getLocation();
+                Dimension d = getSize();
+                config.savePanel(loc.x, loc.y, d.width, d.height);
+            } catch (IOException ex) {
+                System.err.println("[Config] Error guardando: " + ex.getMessage());
+            }
+            repaint();
+        });
+        popup.add(bgItem);
 
         try {
             tray.add(trayIcon);
@@ -373,7 +444,7 @@ public class ChatOverlay extends JFrame {
                 badgeUrls = badgeCache.getBadgeUrls(msg.badgesHeader());
             }
 
-            emoteRenderer.render(doc, msg.platform(), msg.user(), tokens, badgeUrls, msg.userColor());
+            emoteRenderer.render(doc, msg.platform(), msg.user(), tokens, badgeUrls, msg.userColor(), showBackground);
             textPane.setCaretPosition(doc.getLength());
 
         } catch (BadLocationException e) {

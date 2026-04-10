@@ -11,7 +11,7 @@ import java.util.List;
 
 public class EmoteRenderer {
 
-    private final ImageCache imageCache = new ImageCache();
+    private final ImageCache imageCache;
 
     /*
     private static final Color TWITCH_COLOR  = new Color(169, 112, 255);
@@ -24,12 +24,15 @@ public class EmoteRenderer {
     private static final Color USER_COLOR    = new Color(255, 255, 255); // blanco puro
     private static final Color TEXT_COLOR    = new Color(255, 255, 255); // blanco puro
     private static final Font  CHAT_FONT     = new Font("Segoe UI Emoji", Font.PLAIN, 15);
-    private static final int LINE_HEIGHT = 16; // altura de línea
+    private static final int LINE_HEIGHT = 14; // altura de línea
 
     private final ImageIcon TWITCH_ICON;
     private final ImageIcon YOUTUBE_ICON;
+    private final int iconSize;
 
-    public EmoteRenderer() {
+    public EmoteRenderer(int iconSize) {
+        this.iconSize = iconSize;
+        this.imageCache = new ImageCache(iconSize);
         TWITCH_ICON  = loadResourceIcon("/icons/twitch.png");
         YOUTUBE_ICON = loadResourceIcon("/icons/youtube.png");
     }
@@ -39,7 +42,8 @@ public class EmoteRenderer {
             var url = getClass().getResource(path);
             if (url == null) return null;
             BufferedImage img = ImageIO.read(url);
-            Image scaled = img.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+            int scaledWidth = (int) ((double) img.getWidth() / img.getHeight() * iconSize);
+            Image scaled = img.getScaledInstance(scaledWidth, iconSize, Image.SCALE_SMOOTH);
             return new ImageIcon(scaled);
         } catch (Exception e) {
             System.err.println("[EmoteRenderer] No se pudo cargar icono: " + path);
@@ -56,7 +60,8 @@ public class EmoteRenderer {
                        String username,
                        List<EmoteToken> tokens,
                        List<String> badgeUrls,
-                       String userColor) throws BadLocationException {
+                       String userColor,
+                       boolean showBackground) throws BadLocationException {
 
         // Estilo base compartido
         SimpleAttributeSet baseStyle = new SimpleAttributeSet();
@@ -102,6 +107,12 @@ public class EmoteRenderer {
         SimpleAttributeSet textStyle = new SimpleAttributeSet(baseStyle);
         StyleConstants.setForeground(textStyle, TEXT_COLOR);
         StyleConstants.setBold(textStyle, false);
+        // Sombra para legibilidad sin fondo
+        if (!showBackground) {
+            // No hay API directa de sombra en StyledDocument,
+            // usamos negrita para dar más peso visual al texto
+            StyleConstants.setBold(textStyle, true);
+        }
 
         for (EmoteToken token : tokens) {
             switch (token) {

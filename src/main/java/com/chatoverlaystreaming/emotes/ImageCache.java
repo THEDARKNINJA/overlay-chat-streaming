@@ -11,7 +11,12 @@ import java.util.Map;
 public class ImageCache {
 
     private static final int MAX_SIZE    = 300;
-    private static final int EMOTE_HEIGHT   = 16; // tamaño de renderizado
+    // private static final int EMOTE_HEIGHT   = 14; // tamaño de renderizado
+    private final int emoteHeight;
+
+    public ImageCache(int emoteHeight) {
+        this.emoteHeight = emoteHeight;
+    }
 
     private final Map<String, ImageIcon> cache = new LinkedHashMap<>(MAX_SIZE, 0.75f, true) {
         @Override
@@ -45,9 +50,9 @@ public class ImageCache {
             // Calcular ancho proporcional
             int originalWidth  = img.getWidth();
             int originalHeight = img.getHeight();
-            int scaledWidth = (int) ((double) originalWidth / originalHeight * EMOTE_HEIGHT);
+            int scaledWidth = (int) ((double) originalWidth / originalHeight * emoteHeight);
 
-            Image scaled = img.getScaledInstance(scaledWidth, EMOTE_HEIGHT, Image.SCALE_SMOOTH);
+            Image scaled = img.getScaledInstance(scaledWidth, emoteHeight, Image.SCALE_SMOOTH);
             return new ImageIcon(scaled);
         } catch (Exception e) {
             System.err.println("[ImageCache] No se pudo descargar: " + url);

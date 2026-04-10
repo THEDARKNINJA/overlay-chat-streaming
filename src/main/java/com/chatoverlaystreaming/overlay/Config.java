@@ -41,6 +41,8 @@ public class Config {
     public int getPanelWidth()   { return panel.getInt("width");   }
     public int getPanelHeight()   { return panel.getInt("height");   }
     public int getPanelAlpha()   { return panel.getInt("alpha");   }
+    public boolean getShowBackground() { return panel.getBoolean("showBackground"); }
+    public int getIconSize() { return panel.getInt("iconSize"); }
 
     public void savePanel(int x, int y, int width, int height) throws IOException {
         // Actualizar los valores en el objeto JSON en memoria
@@ -50,6 +52,8 @@ public class Config {
         panel.put("width", width);
         panel.put("height", height);
         panel.put("alpha", getPanelAlpha());
+        panel.put("showBackground", getShowBackground());
+        panel.put("iconSize", getIconSize());
 
         // Escribir al disco con formato legible
         Files.writeString(

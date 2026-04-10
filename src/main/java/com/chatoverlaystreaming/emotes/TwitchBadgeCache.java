@@ -115,10 +115,6 @@ public class TwitchBadgeCache {
     private String getAppToken() throws Exception {
         if (cachedToken != null) return cachedToken;
 
-        System.err.println("[Badges] Usando clientId: '" + clientId + "'");
-        System.err.println("[Badges] Longitud clientId: " + clientId.length());
-        System.err.println("[Badges] Longitud clientSecret: " + clientSecret.length());
-
         String url = "https://id.twitch.tv/oauth2/token";
         String body = "client_id=" + clientId.trim() +
                     "&client_secret=" + clientSecret.trim() +
