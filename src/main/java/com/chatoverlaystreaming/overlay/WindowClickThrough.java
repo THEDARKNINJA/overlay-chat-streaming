@@ -58,7 +58,7 @@ public class WindowClickThrough {
     }
     */
 
-    public void setExcludeFromCapture(boolean exclude) {
+    public void setExcludeFromCapture(boolean exclude, int alfa) {
         // Activar WS_EX_LAYERED
         int style = User32.INSTANCE.GetWindowLong(hwnd, GWL_EXSTYLE);
         style |= WS_EX_LAYERED;
@@ -67,7 +67,7 @@ public class WindowClickThrough {
         // Establecer color key: magenta = transparente
         // SetLayeredWindowAttributes(hwnd, colorKey, alpha, flags)
         // flags: 0x1 = usar color key, 0x2 = usar alpha, 0x3 = ambos
-        User32Extra.INSTANCE.SetLayeredWindowAttributes(hwnd, 0x00FF00FF, (byte)100, 0x3);
+        User32Extra.INSTANCE.SetLayeredWindowAttributes(hwnd, 0x00FF00FF, (byte)alfa, 0x3);
 
         int affinity = exclude ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE;
         boolean result = User32Extra.INSTANCE.SetWindowDisplayAffinity(hwnd, affinity);

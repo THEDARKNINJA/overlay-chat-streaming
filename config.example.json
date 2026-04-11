@@ -8,7 +8,10 @@
   "youtube": {
     "channelId": "UCxxxxxx",
     "videoId": "ID_DEL_VIDEO",
-    "apiKey": "TU_API_KEY"
+    "apiKeys": ["TU_API_KEY",
+                "OTRA_APIKEY",
+                "OTRA_APIKEY"],
+    "pageToken": "no"
   },
   "panel": {
     "alpha": 100,
@@ -18,5 +21,8 @@
     "y": 408,
     "height": 450,
     "iconSize": 16
+  },
+  "misc": {
+    "minPollingInterval": 8
   }
 }

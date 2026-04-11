@@ -8,7 +8,7 @@ import java.util.concurrent.BlockingQueue;
 
 public class TwitchChatReader implements Runnable {
 
-    private final String channel;          // sin el #, ej: "xqc"
+    private final String channel;
     private final BlockingQueue<ChatMessage> queue;
 
     public TwitchChatReader(String channel, BlockingQueue<ChatMessage> queue) {
@@ -37,7 +37,6 @@ public class TwitchChatReader implements Runnable {
         PrintWriter writer = new PrintWriter(
                 new OutputStreamWriter(socket.getOutputStream()), true);
 
-        // Autenticación anónima
         writer.println("PASS oauth:twitch_anonymous");
         writer.println("NICK justinfan" + (int)(Math.random() * 90000 + 10000));
         writer.println("CAP REQ :twitch.tv/tags");
@@ -45,34 +44,117 @@ public class TwitchChatReader implements Runnable {
 
         String line;
         while ((line = reader.readLine()) != null) {
-            // Responder pings para mantener la conexión
             if (line.startsWith("PING")) {
                 writer.println("PONG :tmi.twitch.tv");
                 continue;
             }
-            // Parsear mensajes PRIVMSG
-            // Formato: :usuario!usuario@usuario.tmi.twitch.tv PRIVMSG #canal :mensaje
+
             if (line.contains("PRIVMSG")) {
-                // Extraer cabecera de emotes y badges
-                String emotesHeader = null;
-                String badgesHeader = null;
-                String userColor = null;
-                if (line.startsWith("@")) {
-                    String tags = line.substring(1, line.indexOf(' '));
-                    for (String tag : tags.split(";")) {
-                        if (tag.startsWith("emotes=")) emotesHeader = tag.substring(7);
-                        if (tag.startsWith("badges=")) badgesHeader = tag.substring(7);
-                        if (tag.startsWith("color="))  userColor    = tag.substring(6);
-                    }
-                    line = line.substring(line.indexOf(' ') + 1);
-                }
-                
-                String user = line.substring(1, line.indexOf('!'));
-                String text = line.substring(line.indexOf("PRIVMSG #") +
-                            ("PRIVMSG #" + channel + " :").length());
-                queue.put(new ChatMessage("twitch", user, text, emotesHeader, badgesHeader, userColor));
+                handlePrivmsg(line);
+            } else if (line.contains("USERNOTICE")) {
+                handleUsernotice(line);
             }
         }
+    }
+
+    private void handlePrivmsg(String line) throws InterruptedException {
+        String emotesHeader = null;
+        String badgesHeader = null;
+        String userColor    = null;
+        String rewardId     = null;
+        // String rewardTitle  = null;
+        String msgId = null;
+
+        if (line.startsWith("@")) {
+            String tags = line.substring(1, line.indexOf(' '));
+            for (String tag : tags.split(";")) {
+                if (tag.startsWith("emotes="))            emotesHeader = tag.substring(7);
+                if (tag.startsWith("badges="))            badgesHeader = tag.substring(7);
+                if (tag.startsWith("color="))             userColor    = tag.substring(6);
+                if (tag.startsWith("custom-reward-id="))  rewardId     = tag.substring(17);
+                if (tag.startsWith("msg-id="))            msgId        = tag.substring(7);
+            }
+            line = line.substring(line.indexOf(' ') + 1);
+        }
+
+        String user = line.substring(1, line.indexOf('!'));
+        String text = line.substring(line.indexOf("PRIVMSG #") +
+                      ("PRIVMSG #" + channel + " :").length());
+
+        // Detectar cheers (bits) por el patrón "CheerNNN" en el texto
+        String cheerAmount = extractCheerAmount(text, emotesHeader);
+
+        if (cheerAmount != null) {
+            queue.put(new ChatMessage("twitch", user, text,
+                    emotesHeader, badgesHeader, userColor,
+                    "cheer", cheerAmount));
+        } else if (rewardId != null) {
+            queue.put(new ChatMessage("twitch", user, text,
+                    emotesHeader, badgesHeader, userColor,
+                    "reward", "Recompensa de canal"));
+        } else if ("highlighted-message".equals(msgId)) {
+            queue.put(new ChatMessage("twitch", user, text,
+                    emotesHeader, badgesHeader, userColor,
+                    "reward", "Mensaje destacado"));
+        } else {
+            queue.put(new ChatMessage("twitch", user, text,
+                    emotesHeader, badgesHeader, userColor));
+        }
+    }
+
+    private void handleUsernotice(String line) throws InterruptedException {
+        String msgId        = null;
+        String displayName  = null;
+        String userColor    = null;
+        String badgesHeader = null;
+        String systemMsg    = null;
+        String giftCount    = null;
+
+        if (line.startsWith("@")) {
+            String tags = line.substring(1, line.indexOf(' '));
+            for (String tag : tags.split(";")) {
+                if (tag.startsWith("msg-id="))              msgId       = tag.substring(6);
+                if (tag.startsWith("display-name="))        displayName = tag.substring(13);
+                if (tag.startsWith("color="))               userColor   = tag.substring(6);
+                if (tag.startsWith("badges="))              badgesHeader = tag.substring(7);
+                if (tag.startsWith("system-msg="))          systemMsg   = tag.substring(11).replace("\\s", " ");
+                if (tag.startsWith("msg-param-mass-gift-count=")) giftCount = tag.substring(26);
+                if (tag.startsWith("msg-param-gift-months=") && giftCount == null) giftCount = tag.substring(22);
+            }
+        }
+
+        if (msgId == null || displayName == null) return;
+
+        switch (msgId) {
+            case "subgift", "anonsubgift" -> {
+                String extra = giftCount != null ? giftCount + " sub(s) regalo" : "sub regalo";
+                queue.put(new ChatMessage("twitch", displayName, systemMsg != null ? systemMsg : "",
+                        null, badgesHeader, userColor, "subgift", extra));
+            }
+            case "submysterygift" -> {
+                String extra = giftCount != null ? giftCount + " subs regalo" : "subs regalo";
+                queue.put(new ChatMessage("twitch", displayName, systemMsg != null ? systemMsg : "",
+                        null, badgesHeader, userColor, "subgift", extra));
+            }
+        }
+    }
+
+    /**
+     * Detecta si el mensaje contiene bits (Cheer100, cheer50, etc.)
+     * y devuelve la cantidad total, o null si no hay bits.
+     */
+    private String extractCheerAmount(String text, String emotesHeader) {
+        int total = 0;
+        // Los cheers tienen formato: Cheer100, cheer50, PogCheer1000, etc.
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?i)\\b(\\w*cheer)(\\d+)\\b")
+                .matcher(text);
+        while (m.find()) {
+            try {
+                total += Integer.parseInt(m.group(2));
+            } catch (NumberFormatException ignored) {}
+        }
+        return total > 0 ? String.valueOf(total) : null;
     }
 
     private void sleep(long ms) {

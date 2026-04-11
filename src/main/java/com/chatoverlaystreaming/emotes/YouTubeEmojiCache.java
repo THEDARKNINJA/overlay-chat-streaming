@@ -1,105 +1,124 @@
 package com.chatoverlaystreaming.emotes;
 
 import com.chatoverlaystreaming.model.EmoteToken;
-import com.google.api.services.youtube.model.LiveChatMessage;
-import com.google.api.services.youtube.model.LiveChatMessageSnippet;
+import org.json.*;
 import java.util.*;
 
 public class YouTubeEmojiCache {
 
     /**
-     * Convierte un mensaje de YouTube en una lista de tokens,
-     * intercalando imágenes de emoji donde corresponda.
+     * Tokeniza un snippet de mensaje de YouTube a partir del JSON raw,
+     * extrayendo tanto texto como emojis personalizados y Unicode.
      */
-    public List<EmoteToken> tokenize(LiveChatMessage message) {
-        List<EmoteToken> tokens = new ArrayList<>();
-        LiveChatMessageSnippet snippet = message.getSnippet();
-
-        if (!"textMessageEvent".equals(snippet.getType())) {
-            return tokens;
-        }
-
-        // La API puede devolver el mensaje con runs (fragmentos) si hay emojis
-        // En la respuesta JSON, authorChannelId y textMessageDetails.messageText
-        // ya contienen el texto plano. Los emojis de membresía vienen en
-        // superChatDetails o directamente en el texto con su representación Unicode.
-
-        // Para emojis personalizados (de canal), la API v3 los representa
-        // en el campo messageText como su shortcut (ej: ":_nombreEmoji:")
-        // y en liveChatMessage.snippet hay un array "emojiRuns" en la respuesta raw.
-
-        // Estrategia práctica: parseamos el texto y detectamos el patrón :_xxx:
-        String text = snippet.getTextMessageDetails().getMessageText();
-        tokens.addAll(parseEmojiRuns(text, message));
-
-        return tokens;
-    }
-
-    private List<EmoteToken> parseEmojiRuns(String text, LiveChatMessage message) {
+    public List<EmoteToken> tokenize(JSONObject snippet) {
         List<EmoteToken> tokens = new ArrayList<>();
 
-        // Intentamos extraer los "emojiRuns" del objeto crudo si está disponible
-        // La librería de Google los expone a través de getUnknownKeys()
-        Object rawRuns = null;
         try {
-            rawRuns = message.getSnippet().getUnknownKeys().get("textMessageDetails");
-        } catch (Exception ignored) {}
+            JSONObject textMessageDetails = snippet.optJSONObject("textMessageDetails");
+            if (textMessageDetails == null) return tokens;
 
-        if (rawRuns instanceof Map<?, ?> details) {
-            Object runs = ((Map<?, ?>) details).get("messageRuns");
-            if (runs instanceof List<?> runList) {
-                return parseRunList(runList);
+            // Intentar obtener los messageRuns del JSON raw
+            JSONArray messageRuns = textMessageDetails.optJSONArray("messageRuns");
+
+            if (messageRuns != null && messageRuns.length() > 0) {
+                return parseMessageRuns(messageRuns);
             }
+
+            // Fallback: texto plano
+            String text = textMessageDetails.optString("messageText", "");
+            if (!text.isBlank()) {
+                tokens.add(new EmoteToken.Text(text));
+            }
+
+        } catch (Exception e) {
+            System.err.println("[YouTube] Error parseando mensaje: " + e.getMessage());
         }
 
-        // Fallback: si no tenemos runs, devolvemos el texto plano
-        // Los emojis Unicode (😂 🔥) se renderizan solos si la fuente los soporta
-        tokens.add(new EmoteToken.Text(text));
         return tokens;
     }
 
-    @SuppressWarnings("unchecked")
-    private List<EmoteToken> parseRunList(List<?> runs) {
+    private List<EmoteToken> parseMessageRuns(JSONArray runs) {
         List<EmoteToken> tokens = new ArrayList<>();
-        for (Object run : runs) {
-            if (!(run instanceof Map)) continue;
-            Map<String, Object> runMap = (Map<String, Object>) run;
 
-            if (runMap.containsKey("text")) {
+        for (int i = 0; i < runs.length(); i++) {
+            JSONObject run = runs.getJSONObject(i);
+
+            if (run.has("text")) {
                 // Fragmento de texto normal
-                tokens.add(new EmoteToken.Text(runMap.get("text").toString()));
+                String text = run.getString("text");
+                if (!text.isEmpty()) {
+                    tokens.add(new EmoteToken.Text(text));
+                }
 
-            } else if (runMap.containsKey("emoji")) {
-                // Emoji: puede ser Unicode o personalizado de canal
-                Map<String, Object> emoji = (Map<String, Object>) runMap.get("emoji");
+            } else if (run.has("emoji")) {
+                JSONObject emoji = run.getJSONObject("emoji");
                 String imageUrl = extractEmojiUrl(emoji);
 
                 if (imageUrl != null) {
-                    String name = emoji.getOrDefault("shortcuts", List.of("emoji"))
-                                       .toString();
+                    // Emoji personalizado de canal con imagen
+                    String name = extractEmojiName(emoji);
                     tokens.add(new EmoteToken.Emote(name, imageUrl));
                 } else {
-                    // Emoji Unicode estándar — lo dejamos como texto, la fuente lo renderiza
-                    Object emojiId = emoji.get("emojiId");
-                    if (emojiId != null) {
-                        tokens.add(new EmoteToken.Text(emojiId.toString()));
+                    // Emoji Unicode estándar — extraer el carácter directamente
+                    String emojiChar = extractUnicodeEmoji(emoji);
+                    if (emojiChar != null && !emojiChar.isBlank()) {
+                        tokens.add(new EmoteToken.Text(emojiChar));
                     }
                 }
             }
         }
+
         return tokens;
     }
 
-    @SuppressWarnings("unchecked")
-    private String extractEmojiUrl(Map<String, Object> emoji) {
+    private String extractEmojiUrl(JSONObject emoji) {
         try {
-            Map<String, Object> image = (Map<String, Object>) emoji.get("image");
+            JSONObject image = emoji.optJSONObject("image");
             if (image == null) return null;
-            List<Map<String, Object>> thumbnails =
-                    (List<Map<String, Object>>) image.get("thumbnails");
-            if (thumbnails == null || thumbnails.isEmpty()) return null;
+
+            JSONArray thumbnails = image.optJSONArray("thumbnails");
+            if (thumbnails == null || thumbnails.length() == 0) return null;
+
             // Preferimos el último thumbnail (mayor resolución)
-            return thumbnails.get(thumbnails.size() - 1).get("url").toString();
+            return thumbnails.getJSONObject(thumbnails.length() - 1)
+                             .getString("url");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String extractEmojiName(JSONObject emoji) {
+        try {
+            // Intentar obtener el shortcut del emoji
+            JSONArray shortcuts = emoji.optJSONArray("shortcuts");
+            if (shortcuts != null && shortcuts.length() > 0) {
+                return shortcuts.getString(0);
+            }
+            // Fallback al emojiId
+            return emoji.optString("emojiId", "emoji");
+        } catch (Exception e) {
+            return "emoji";
+        }
+    }
+
+    private String extractUnicodeEmoji(JSONObject emoji) {
+        try {
+            // El emoji Unicode viene en el campo emojiId como el carácter directamente
+            String emojiId = emoji.optString("emojiId", null);
+            if (emojiId != null) return emojiId;
+
+            // O puede venir dentro de image.accessibility.accessibilityData.label
+            JSONObject image = emoji.optJSONObject("image");
+            if (image != null) {
+                JSONObject accessibility = image.optJSONObject("accessibility");
+                if (accessibility != null) {
+                    JSONObject accessibilityData = accessibility.optJSONObject("accessibilityData");
+                    if (accessibilityData != null) {
+                        return accessibilityData.optString("label", null);
+                    }
+                }
+            }
+            return null;
         } catch (Exception e) {
             return null;
         }

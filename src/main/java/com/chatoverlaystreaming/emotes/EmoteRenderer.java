@@ -23,6 +23,9 @@ public class EmoteRenderer {
     private static final Color YOUTUBE_COLOR = new Color(255, 80,  80);  // rojo ya está bastante vivo
     private static final Color USER_COLOR    = new Color(255, 255, 255); // blanco puro
     private static final Color TEXT_COLOR    = new Color(255, 255, 255); // blanco puro
+    private static final Color REWARD_COLOR  = new Color(255, 180,  50); // dorado
+    private static final Color SUBGIFT_COLOR = new Color( 50, 220, 120); // verde
+    private static final Color CHEER_COLOR   = new Color(150, 100, 255); // morado claro
     private static final Font  CHAT_FONT     = new Font("Segoe UI Emoji", Font.PLAIN, 15);
     private static final int LINE_HEIGHT = 14; // altura de línea
 
@@ -56,20 +59,92 @@ public class EmoteRenderer {
      * plataforma, nombre de usuario y tokens de texto/emotes.
      */
     public void render(StyledDocument doc,
-                       String platform,
-                       String username,
-                       List<EmoteToken> tokens,
-                       List<String> badgeUrls,
-                       String userColor,
-                       boolean showBackground) throws BadLocationException {
+                   String platform,
+                   String username,
+                   String text,
+                   List<EmoteToken> tokens,
+                   List<String> badgeUrls,
+                   String userColor,
+                   String eventType,
+                   String eventExtra,
+                   boolean showBackground) throws BadLocationException {
 
-        // Estilo base compartido
         SimpleAttributeSet baseStyle = new SimpleAttributeSet();
         StyleConstants.setFontFamily(baseStyle, CHAT_FONT.getFamily());
         StyleConstants.setFontSize(baseStyle, CHAT_FONT.getSize());
 
-        // -- Icono de plataforma --
-        SimpleAttributeSet platformStyle = new SimpleAttributeSet(baseStyle);
+        if (eventType != null) {
+            switch (eventType) {
+                case "reward" -> {
+                    if ("Mensaje destacado".equals(eventExtra)) {
+                        // Estilo subrayado dorado
+                        SimpleAttributeSet highlightStyle = new SimpleAttributeSet(baseStyle);
+                        StyleConstants.setUnderline(highlightStyle, true);
+
+                        renderMessageBody(doc, platform, username, tokens,
+                                        badgeUrls, userColor, highlightStyle);
+
+                        // Tag al final
+                        SimpleAttributeSet tagStyle = new SimpleAttributeSet(baseStyle);
+                        StyleConstants.setForeground(tagStyle, REWARD_COLOR);
+                        StyleConstants.setBold(tagStyle, true);
+                        doc.insertString(doc.getLength(), " — ★ Mensaje destacado\n", tagStyle);
+                        
+                    } else {
+
+                        // Recompensa normal sin mensaje
+                        SimpleAttributeSet eventStyle = new SimpleAttributeSet(baseStyle);
+                        StyleConstants.setForeground(eventStyle, REWARD_COLOR);
+                        StyleConstants.setBold(eventStyle, true);
+                        if (text == null || text.isBlank()) {
+                            doc.insertString(doc.getLength(),
+                                    "★ RECOMPENSA — " + eventExtra + " — " + username + "\n", eventStyle);
+                            return;
+                        }
+                        doc.insertString(doc.getLength(), "★ RECOMPENSA — " + eventExtra + "\n", eventStyle);
+                        renderMessageBody(doc, platform, username, tokens,
+                                        badgeUrls, userColor, baseStyle);
+                        doc.insertString(doc.getLength(), "\n", baseStyle);
+
+                    }
+                    return;
+                }
+                case "subgift" -> {
+                    SimpleAttributeSet eventStyle = new SimpleAttributeSet(baseStyle);
+                    StyleConstants.setForeground(eventStyle, SUBGIFT_COLOR);
+                    StyleConstants.setBold(eventStyle, true);
+                    doc.insertString(doc.getLength(),
+                            "♥ GIFT — " + username + " regaló " + eventExtra + "\n", eventStyle);
+                    return;
+                }
+                case "cheer" -> {
+                    SimpleAttributeSet eventStyle = new SimpleAttributeSet(baseStyle);
+                    StyleConstants.setForeground(eventStyle, CHEER_COLOR);
+                    StyleConstants.setBold(eventStyle, true);
+                    doc.insertString(doc.getLength(),
+                            "✦ " + eventExtra + " BITS — ", eventStyle);
+                    renderMessageBody(doc, platform, username, tokens,
+                                    badgeUrls, userColor, baseStyle);
+                    doc.insertString(doc.getLength(), "\n", baseStyle);
+                    return;
+                }
+            }
+        }
+
+        // Mensaje normal
+        renderMessageBody(doc, platform, username, tokens, badgeUrls, userColor, baseStyle);
+        doc.insertString(doc.getLength(), "\n", baseStyle);
+    }
+
+    private void renderMessageBody(StyledDocument doc,
+                                String platform,
+                                String username,
+                                List<EmoteToken> tokens,
+                                List<String> badgeUrls,
+                                String userColor,
+                                AttributeSet overrideStyle) throws BadLocationException {
+
+        SimpleAttributeSet platformStyle = new SimpleAttributeSet(overrideStyle);
         Color platformColor = "twitch".equals(platform) ? TWITCH_COLOR : YOUTUBE_COLOR;
         StyleConstants.setForeground(platformStyle, platformColor);
         StyleConstants.setBold(platformStyle, true);
@@ -79,59 +154,39 @@ public class EmoteRenderer {
             insertIcon(doc, platformIcon, platform, platformStyle);
             doc.insertString(doc.getLength(), " ", platformStyle);
         } else {
-            // Fallback al texto si no hay icono
-            String tag = "twitch".equals(platform) ? "[T] " : "[YT] ";
-            doc.insertString(doc.getLength(), tag, platformStyle);
+            doc.insertString(doc.getLength(), "twitch".equals(platform) ? "[T] " : "[YT] ", platformStyle);
         }
 
-        // -- Badges de Twitch --
         if (badgeUrls != null && !badgeUrls.isEmpty()) {
             for (String badgeUrl : badgeUrls) {
                 ImageIcon badge = imageCache.get(badgeUrl);
                 if (badge != null) {
-                    insertIcon(doc, badge, "badge", baseStyle);
-                    // Pequeño espacio después de cada badge
-                    doc.insertString(doc.getLength(), " ", baseStyle);
+                    insertIcon(doc, badge, "badge", overrideStyle);
+                    doc.insertString(doc.getLength(), " ", overrideStyle);
                 }
             }
         }
 
-        // -- Nombre de usuario --
         Color nameColor = resolveUserColor(userColor, username);
-        SimpleAttributeSet userStyle = new SimpleAttributeSet(baseStyle);
+        SimpleAttributeSet userStyle = new SimpleAttributeSet(overrideStyle);
         StyleConstants.setForeground(userStyle, nameColor);
         StyleConstants.setBold(userStyle, true);
         doc.insertString(doc.getLength(), username + ": ", userStyle);
 
-        // -- Tokens del mensaje --
-        SimpleAttributeSet textStyle = new SimpleAttributeSet(baseStyle);
+        SimpleAttributeSet textStyle = new SimpleAttributeSet(overrideStyle);
         StyleConstants.setForeground(textStyle, TEXT_COLOR);
         StyleConstants.setBold(textStyle, false);
-        // Sombra para legibilidad sin fondo
-        if (!showBackground) {
-            // No hay API directa de sombra en StyledDocument,
-            // usamos negrita para dar más peso visual al texto
-            StyleConstants.setBold(textStyle, true);
-        }
-
         for (EmoteToken token : tokens) {
             switch (token) {
-                case EmoteToken.Text t -> {
+                case EmoteToken.Text t ->
                     doc.insertString(doc.getLength(), t.content(), textStyle);
-                }
                 case EmoteToken.Emote e -> {
                     ImageIcon icon = imageCache.get(e.url());
-                    if (icon != null) {
-                        insertIcon(doc, icon, e.name(), textStyle);
-                    } else {
-                        // Fallback al nombre del emote
-                        doc.insertString(doc.getLength(), e.name(), textStyle);
-                    }
+                    if (icon != null) insertIcon(doc, icon, e.name(), textStyle);
+                    else doc.insertString(doc.getLength(), e.name(), textStyle);
                 }
             }
         }
-
-        doc.insertString(doc.getLength(), "\n", textStyle);
     }
 
     private Color resolveUserColor(String hexColor, String username) {

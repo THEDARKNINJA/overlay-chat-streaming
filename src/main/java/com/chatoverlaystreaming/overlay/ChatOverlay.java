@@ -19,7 +19,7 @@ public class ChatOverlay extends JFrame {
 
     private final JTextPane textPane;
     private final StyledDocument doc;
-    private static final int MAX_MESSAGES = 50;
+    private static final int MAX_MESSAGES = 100;
 
     private final TwitchEmoteCache  twitchEmoteCache = new TwitchEmoteCache();
     private final BTTVEmoteCache    bttvEmoteCache;
@@ -45,7 +45,8 @@ public class ChatOverlay extends JFrame {
                        Config config) {
 
         this.config = config;
-
+        
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setUndecorated(true);
         //setBackground(new Color(0, 0, 0, 0));
         setBackground(Color.MAGENTA);
@@ -79,11 +80,6 @@ public class ChatOverlay extends JFrame {
                 saveTimer.restart();
             }
         });
-
-        bttvEmoteCache = new BTTVEmoteCache(twitchChannelId);
-        badgeCache     = new TwitchBadgeCache(twitchClientId,
-                                              twitchClientSecret,
-                                              twitchChannelId);
 
         // Panel principal con fondo semitransparente
         JPanel panel = new JPanel(new BorderLayout()) {
@@ -227,20 +223,6 @@ public class ChatOverlay extends JFrame {
         panel.add(scroll,  BorderLayout.CENTER);
         add(panel);
 
-        // Hilo consumidor de la cola
-        Thread consumer = new Thread(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
-                try {
-                    ChatMessage msg = queue.take();
-                    SwingUtilities.invokeLater(() -> appendMessage(msg));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        });
-        consumer.setDaemon(true);
-        consumer.start();
-
         addWindowFocusListener(new WindowFocusListener() {
             @Override
             public void windowGainedFocus(WindowEvent e) {
@@ -354,6 +336,26 @@ public class ChatOverlay extends JFrame {
 
         resizeHandle.addMouseListener(resizeAdapter);
         resizeHandle.addMouseMotionListener(resizeAdapter);
+
+        //Inicializar BTTV Emotes y Twitch Badges
+        bttvEmoteCache = new BTTVEmoteCache(twitchChannelId);
+        badgeCache     = new TwitchBadgeCache(twitchClientId,
+                                              twitchClientSecret,
+                                              twitchChannelId);
+
+        // Hilo consumidor de la cola
+        Thread consumer = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    ChatMessage msg = queue.take();
+                    SwingUtilities.invokeLater(() -> appendMessage(msg));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+        consumer.setDaemon(true);
+        consumer.start();
     }
 
     /**
@@ -370,7 +372,7 @@ public class ChatOverlay extends JFrame {
             try {
                 clickThrough = new WindowClickThrough(this);
                 clickThrough.setClickThrough(isLocked);
-                clickThrough.setExcludeFromCapture(true);
+                clickThrough.setExcludeFromCapture(true, config.getPanelAlpha());
             } catch (Exception e) {
                 System.err.println("[Overlay] Funciones nativas no disponibles: " + e.getMessage());
             }
@@ -438,7 +440,7 @@ public class ChatOverlay extends JFrame {
         captureItem.addActionListener(e -> {
             boolean currentlyExcluded = true; // podrías guardarlo como campo
             // toggle
-            clickThrough.setExcludeFromCapture(!currentlyExcluded);
+            clickThrough.setExcludeFromCapture(!currentlyExcluded, config.getPanelAlpha());
             captureItem.setText(currentlyExcluded
                 ? "Excluir de captura de pantalla"
                 : "Permitir captura de pantalla");
@@ -534,6 +536,12 @@ public class ChatOverlay extends JFrame {
             if (doc.getDefaultRootElement().getElementCount() > MAX_MESSAGES) {
                 Element root  = doc.getDefaultRootElement();
                 Element first = root.getElement(0);
+                try {
+                    String removedText = doc.getText(first.getStartOffset(), 
+                                                    first.getEndOffset() - first.getStartOffset());
+                    System.err.println("[Chat] Eliminando mensaje antiguo: " + 
+                                    removedText.trim().substring(0, Math.min(50, removedText.trim().length())));
+                } catch (Exception ignored) {}
                 doc.remove(0, first.getEndOffset());
             }
 
@@ -550,11 +558,15 @@ public class ChatOverlay extends JFrame {
                 badgeUrls = badgeCache.getBadgeUrls(msg.badgesHeader());
             }
 
-            emoteRenderer.render(doc, msg.platform(), msg.user(), tokens, badgeUrls, msg.userColor(), showBackground);
+            
+            emoteRenderer.render(doc, msg.platform(), msg.user(), msg.text(), tokens, badgeUrls, msg.userColor(), msg.eventType(), msg.eventExtra(), showBackground);
             textPane.setCaretPosition(doc.getLength());
 
         } catch (BadLocationException e) {
             e.printStackTrace();
+        } catch (Exception e) {
+            System.err.println("[Overlay] Error añadiendo mensaje: " + e.getMessage());
+            // No relanzar la excepción para que no afecte al hilo de Swing
         }
     }
 

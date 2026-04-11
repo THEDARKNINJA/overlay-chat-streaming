@@ -12,6 +12,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Main {
 
     public static void main(String[] args) {
+        Logger.init();
+        // Shutdown hook para cerrar el log al salir
+        Runtime.getRuntime().addShutdownHook(new Thread(Logger::close));
         // Cargar configuración
         Config config;
         try {
@@ -33,7 +36,8 @@ public class Main {
         Thread youtubeThread = new Thread(
                 new YouTubeChatReader(config.getYoutubeChannelId(),
                                       config.getYoutubeVideoId(),
-                                      config.getYoutubeApiKey(), queue),
+                                      config.getYoutubeApiKeys(),
+                                      queue, config),
                 "youtube-reader");
         youtubeThread.setDaemon(true);
         youtubeThread.start();

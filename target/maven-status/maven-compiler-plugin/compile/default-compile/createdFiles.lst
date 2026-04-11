@@ -5,8 +5,10 @@ com\chatoverlaystreaming\overlay\ChatOverlay$10.class
 com\chatoverlaystreaming\overlay\ChatOverlay$2.class
 com\chatoverlaystreaming\emotes\BTTVEmoteCache.class
 com\chatoverlaystreaming\overlay\Config.class
+com\chatoverlaystreaming\Logger.class
 com\chatoverlaystreaming\overlay\ChatOverlay$13.class
 com\chatoverlaystreaming\model\EmoteToken.class
+com\chatoverlaystreaming\Logger$TeeOutputStream.class
 com\chatoverlaystreaming\overlay\ChatOverlay$4.class
 com\chatoverlaystreaming\model\EmoteToken$Emote.class
 com\chatoverlaystreaming\overlay\ChatOverlay$7.class
@@ -14,6 +16,7 @@ com\chatoverlaystreaming\overlay\ChatOverlay$11.class
 com\chatoverlaystreaming\emotes\EmoteRenderer.class
 com\chatoverlaystreaming\emotes\ImageCache$1.class
 com\chatoverlaystreaming\emotes\YouTubeEmojiCache.class
+com\chatoverlaystreaming\Logger$1.class
 com\chatoverlaystreaming\Main.class
 com\chatoverlaystreaming\readers\TwitchChatReader.class
 com\chatoverlaystreaming\emotes\CenteredIcon.class
@@ -31,3 +34,4 @@ com\chatoverlaystreaming\overlay\WindowClickThrough$User32Extra.class
 com\chatoverlaystreaming\emotes\ImageCache.class
 com\chatoverlaystreaming\overlay\ChatOverlay$8.class
 com\chatoverlaystreaming\overlay\ChatOverlay$3.class
+com\chatoverlaystreaming\Logger$2.class
