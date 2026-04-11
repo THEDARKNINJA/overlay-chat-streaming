@@ -12,7 +12,9 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 
 public class ChatOverlay extends JFrame {
@@ -25,6 +27,10 @@ public class ChatOverlay extends JFrame {
     private final BTTVEmoteCache    bttvEmoteCache;
     private final TwitchBadgeCache  badgeCache;
     private final EmoteRenderer     emoteRenderer;
+    // messageId -> [startOffset, endOffset]
+    private final Map<String, int[]> messageOffsets = new LinkedHashMap<>();
+    // usuario -> lista de messageIds
+    private final Map<String, List<String>> userMessages = new LinkedHashMap<>();
     private WindowClickThrough clickThrough;
     private TrayIcon trayIcon;
     private JMenuItem toggleItem;
@@ -34,6 +40,11 @@ public class ChatOverlay extends JFrame {
     private boolean showBackground;
     private boolean isLocked = true;
     private boolean hasFocus = false;
+    private String twitchViewers  = "?";
+    private String youtubeViewers = "?";
+    private JPanel viewerPanel;
+    private ImageIcon twitchIcon;
+    private ImageIcon youtubeIcon;
 
     private final Config config;
     private javax.swing.Timer saveTimer;
@@ -45,6 +56,9 @@ public class ChatOverlay extends JFrame {
                        Config config) {
 
         this.config = config;
+
+        twitchIcon  = loadIcon("/icons/twitch.png", 14);
+        youtubeIcon = loadIcon("/icons/youtube.png", 14);
         
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setUndecorated(true);
@@ -192,6 +206,64 @@ public class ChatOverlay extends JFrame {
         };
         resizeHandle.setOpaque(false);
         resizeHandle.setPreferredSize(new Dimension(16, 16));
+
+        viewerPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                if (!config.getShowViewerCount()) return;
+
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+                Font font = new Font("Segoe UI", Font.BOLD, 12);
+                g2.setFont(font);
+                FontMetrics fm = g2.getFontMetrics();
+
+                int x = 6;
+                int y = getHeight() / 2;
+
+                // Icono Twitch
+                if (twitchIcon != null) {
+                    twitchIcon.paintIcon(this, g2, x, y - 7);
+                } else {
+                    g2.setColor(new Color(100, 60, 200, 200));
+                    g2.fillRoundRect(x, y - 7, 14, 14, 4, 4);
+                    g2.setColor(Color.WHITE);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 8));
+                    g2.drawString("T", x + 4, y + 3);
+                }
+
+                // Número Twitch
+                g2.setFont(font);
+                g2.setColor(new Color(220, 200, 255));
+                x += 18;
+                g2.drawString(twitchViewers, x, y + fm.getAscent() / 2);
+                x += fm.stringWidth(twitchViewers) + 10;
+
+                // Icono YouTube
+                if (youtubeIcon != null) {
+                    youtubeIcon.paintIcon(this, g2, x, y - 7);
+                } else {
+                    g2.setColor(new Color(200, 40, 40, 200));
+                    g2.fillRoundRect(x, y - 7, 14, 14, 4, 4);
+                    g2.setColor(Color.WHITE);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 8));
+                    g2.drawString("Y", x + 4, y + 3);
+                }
+
+                // Número YouTube
+                g2.setFont(font);
+                g2.setColor(new Color(255, 150, 150));
+                x += 18;
+                g2.drawString(youtubeViewers, x, y + fm.getAscent() / 2);
+
+                g2.dispose();
+            }
+        };
+        viewerPanel.setOpaque(false);
+        viewerPanel.setPreferredSize(new Dimension(0, 20));
+        panel.add(viewerPanel, BorderLayout.SOUTH);
 
         // Área de texto
         textPane = new JTextPane();
@@ -532,41 +604,113 @@ public class ChatOverlay extends JFrame {
 
     private void appendMessage(ChatMessage msg) {
         try {
+            // Eventos de moderación
+            if ("clearchat".equals(msg.eventType())) {
+                clearUserMessages(msg.targetUser());
+                return;
+            }
+            if ("clearall".equals(msg.eventType())) {
+                clearAllMessages();
+                return;
+            }
+            if ("clearmsg".equals(msg.eventType())) {
+                clearSingleMessage(msg.messageId());
+                return;
+            }
+
             // Limpiar mensajes viejos
             if (doc.getDefaultRootElement().getElementCount() > MAX_MESSAGES) {
                 Element root  = doc.getDefaultRootElement();
                 Element first = root.getElement(0);
                 try {
-                    String removedText = doc.getText(first.getStartOffset(), 
-                                                    first.getEndOffset() - first.getStartOffset());
-                    System.err.println("[Chat] Eliminando mensaje antiguo: " + 
-                                    removedText.trim().substring(0, Math.min(50, removedText.trim().length())));
+                    String removedText = doc.getText(first.getStartOffset(),
+                            first.getEndOffset() - first.getStartOffset());
+                    System.err.println("[Chat] Eliminando mensaje antiguo: " +
+                            removedText.trim().substring(0, Math.min(50, removedText.trim().length())));
                 } catch (Exception ignored) {}
                 doc.remove(0, first.getEndOffset());
             }
+
+            // Guardar offset de inicio antes de insertar
+            int startOffset = doc.getLength();
 
             List<EmoteToken> tokens;
             List<String> badgeUrls = null;
 
             if (msg.precomputedTokens() != null) {
-                // YouTube: tokens ya procesados en el reader
                 tokens = msg.precomputedTokens();
             } else {
-                // Twitch: procesar emotes y badges aquí
                 tokens = twitchEmoteCache.tokenize(msg.emotesHeader(), msg.text());
                 tokens = bttvEmoteCache.process(tokens);
                 badgeUrls = badgeCache.getBadgeUrls(msg.badgesHeader());
             }
 
-            
-            emoteRenderer.render(doc, msg.platform(), msg.user(), msg.text(), tokens, badgeUrls, msg.userColor(), msg.eventType(), msg.eventExtra(), showBackground);
+            emoteRenderer.render(doc, msg.platform(), msg.user(), msg.text(),
+                    tokens, badgeUrls, msg.userColor(),
+                    msg.eventType(), msg.eventExtra(), showBackground);
+
+            // Guardar offset de fin y asociar al messageId y usuario
+            int endOffset = doc.getLength();
+            if (msg.messageId() != null) {
+                messageOffsets.put(msg.messageId(), new int[]{startOffset, endOffset});
+                System.err.println("[Chat] Guardado mensaje id=" + msg.messageId() + 
+                       " offsets=[" + startOffset + "," + endOffset + "]");
+            }
+            if (msg.user() != null && msg.messageId() != null) {
+                userMessages.computeIfAbsent(msg.user().toLowerCase(), k -> new java.util.ArrayList<>())
+                        .add(msg.messageId());
+            }
+
             textPane.setCaretPosition(doc.getLength());
 
-        } catch (BadLocationException e) {
-            e.printStackTrace();
         } catch (Exception e) {
             System.err.println("[Overlay] Error añadiendo mensaje: " + e.getMessage());
-            // No relanzar la excepción para que no afecte al hilo de Swing
+        }
+    }
+
+    private void clearSingleMessage(String messageId) {
+        System.err.println("[Chat] Intentando borrar messageId=" + messageId);
+System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
+        if (messageId == null || !messageOffsets.containsKey(messageId)) return;
+        try {
+            int[] offsets = messageOffsets.get(messageId);
+            int start = offsets[0];
+            int end   = offsets[1];
+            int length = end - start;
+
+            if (start < doc.getLength() && length > 0) {
+                // Reemplazar el mensaje con un texto tachado en gris
+                SimpleAttributeSet strikeStyle = new SimpleAttributeSet();
+                StyleConstants.setStrikeThrough(strikeStyle, true);
+                StyleConstants.setForeground(strikeStyle, new Color(120, 120, 120));
+                StyleConstants.setFontFamily(strikeStyle, new Font("Segoe UI Emoji", Font.PLAIN, 13).getFamily());
+                StyleConstants.setFontSize(strikeStyle, 13);
+                doc.remove(start, length);
+                doc.insertString(start, "<mensaje eliminado>\n", strikeStyle);
+            }
+
+            messageOffsets.remove(messageId);
+        } catch (Exception e) {
+            System.err.println("[Overlay] Error borrando mensaje: " + e.getMessage());
+        }
+    }
+
+    private void clearUserMessages(String username) {
+        if (username == null) return;
+        List<String> ids = userMessages.get(username.toLowerCase());
+        if (ids == null) return;
+        // Copiar la lista para evitar ConcurrentModificationException
+        new java.util.ArrayList<>(ids).forEach(this::clearSingleMessage);
+        userMessages.remove(username.toLowerCase());
+    }
+
+    private void clearAllMessages() {
+        try {
+            doc.remove(0, doc.getLength());
+            messageOffsets.clear();
+            userMessages.clear();
+        } catch (Exception e) {
+            System.err.println("[Overlay] Error limpiando chat: " + e.getMessage());
         }
     }
 
@@ -593,5 +737,17 @@ public class ChatOverlay extends JFrame {
 
         target.addMouseListener(dragAdapter);
         target.addMouseMotionListener(dragAdapter);
+    }
+    private ImageIcon loadIcon(String path, int size) {
+        try {
+            var url = getClass().getResource(path);
+            if (url == null) return null;
+            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(url);
+            java.awt.Image scaled = img.getScaledInstance(size, size, java.awt.Image.SCALE_SMOOTH);
+            return new ImageIcon(scaled);
+        } catch (Exception e) {
+            System.err.println("[Overlay] No se pudo cargar icono: " + path);
+            return null;
+        }
     }
 }

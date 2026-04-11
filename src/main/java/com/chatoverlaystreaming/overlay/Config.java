@@ -39,7 +39,8 @@ public class Config {
     public String getYoutubeChannelId()  { return youtube.getString("channelId");  }
     public String getYoutubeVideoId()  { return youtube.getString("videoId");  }
     public String getYoutubeApiKey()   { return getYoutubeApiKeys().get(0);   }
-    public String getYoutubePageToken() { return youtube.getString("getPageToken"); }
+    public String getYoutubeLastPageToken() { return youtube.optString("lastPageToken", null);  }
+    public String getYoutubeLastVideoId() { return youtube.optString("lastVideoId", null); }
     public int getPanelX()   { return panel.getInt("x");   }
     public int getPanelY()   { return panel.getInt("y");   }
     public int getPanelWidth()   { return panel.getInt("width");   }
@@ -48,14 +49,21 @@ public class Config {
     public boolean getShowBackground() { return panel.getBoolean("showBackground"); }
     public int getIconSize() { return panel.getInt("iconSize"); }
     public int getMinPollingInterval() { return misc.getInt("minPollingInterval"); }
+    public boolean getShowViewerCount() { return misc.getBoolean("showViewerCount"); }
 
     public List<String> getYoutubeApiKeys() {
-        org.json.JSONArray keys = youtube.getJSONArray("apiKeys");
-        List<String> result = new java.util.ArrayList<>();
-        for (int i = 0; i < keys.length(); i++) {
-            result.add(keys.getString(i));
+        // Soportar tanto apiKeys (array) como apiKey (string único)
+        if (youtube.has("apiKeys")) {
+            org.json.JSONArray keys = youtube.getJSONArray("apiKeys");
+            List<String> result = new java.util.ArrayList<>();
+            for (int i = 0; i < keys.length(); i++) {
+                result.add(keys.getString(i));
+            }
+            return result;
+        } else if (youtube.has("apiKey")) {
+            return List.of(youtube.getString("apiKey"));
         }
-        return result;
+        throw new RuntimeException("No se encontró ninguna API key de YouTube en el config.");
     }
 
     public void savePanel(int x, int y, int width, int height) throws IOException {
@@ -85,15 +93,9 @@ public class Config {
         );
     }
 
-    public void saveYouTubePageToken(String pageToken) throws IOException {
-        // Actualizar los valores en el objeto JSON en memoria
-        JSONObject panel = root.getJSONObject("youtube");
-        panel.put("pageToken", pageToken);
-
-        // Escribir al disco con formato legible
-        Files.writeString(
-            Paths.get("config.json"),
-            root.toString(2)  // el 2 es la indentación
-        );
+    public void saveYoutubePageToken(String videoId, String pageToken) throws IOException {
+        youtube.put("lastVideoId", videoId);
+        youtube.put("lastPageToken", pageToken);
+        Files.writeString(Paths.get("config.json"), root.toString(2));
     }
 }

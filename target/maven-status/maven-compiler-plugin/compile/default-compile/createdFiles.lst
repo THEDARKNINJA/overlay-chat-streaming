@@ -1,3 +1,4 @@
+com\chatoverlaystreaming\overlay\ChatOverlay$15.class
 com\chatoverlaystreaming\overlay\ChatOverlay$9.class
 com\chatoverlaystreaming\model\ChatMessage.class
 com\chatoverlaystreaming\overlay\ChatOverlay.class
@@ -8,6 +9,7 @@ com\chatoverlaystreaming\overlay\Config.class
 com\chatoverlaystreaming\Logger.class
 com\chatoverlaystreaming\overlay\ChatOverlay$13.class
 com\chatoverlaystreaming\model\EmoteToken.class
+com\chatoverlaystreaming\readers\YouTubeChatReader$ChatEndedException.class
 com\chatoverlaystreaming\Logger$TeeOutputStream.class
 com\chatoverlaystreaming\overlay\ChatOverlay$4.class
 com\chatoverlaystreaming\model\EmoteToken$Emote.class
@@ -27,11 +29,13 @@ com\chatoverlaystreaming\overlay\ChatOverlay$5.class
 com\chatoverlaystreaming\emotes\TwitchEmoteCache.class
 com\chatoverlaystreaming\overlay\ChatOverlay$12.class
 com\chatoverlaystreaming\overlay\ChatOverlay$6.class
+com\chatoverlaystreaming\readers\YouTubeChatReader$QuotaExceededException.class
 com\chatoverlaystreaming\emotes\TwitchBadgeCache.class
 com\chatoverlaystreaming\model\EmoteToken$Text.class
 com\chatoverlaystreaming\overlay\WindowClickThrough.class
 com\chatoverlaystreaming\overlay\WindowClickThrough$User32Extra.class
 com\chatoverlaystreaming\emotes\ImageCache.class
+com\chatoverlaystreaming\service\ViewerCountService.class
 com\chatoverlaystreaming\overlay\ChatOverlay$8.class
 com\chatoverlaystreaming\overlay\ChatOverlay$3.class
 com\chatoverlaystreaming\Logger$2.class

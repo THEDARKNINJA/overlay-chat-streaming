@@ -53,7 +53,12 @@ public class TwitchChatReader implements Runnable {
                 handlePrivmsg(line);
             } else if (line.contains("USERNOTICE")) {
                 handleUsernotice(line);
+            } else if (line.contains("CLEARCHAT")) {
+                handleClearchat(line);
+            } else if (line.contains("CLEARMSG")) {
+                handleClearmsg(line);
             }
+            System.err.println("[Twitch IRC] " + line);
         }
     }
 
@@ -63,7 +68,8 @@ public class TwitchChatReader implements Runnable {
         String userColor    = null;
         String rewardId     = null;
         // String rewardTitle  = null;
-        String msgId = null;
+        String msgId        = null;
+        String msgIdTag     = null;
 
         if (line.startsWith("@")) {
             String tags = line.substring(1, line.indexOf(' '));
@@ -73,6 +79,7 @@ public class TwitchChatReader implements Runnable {
                 if (tag.startsWith("color="))             userColor    = tag.substring(6);
                 if (tag.startsWith("custom-reward-id="))  rewardId     = tag.substring(17);
                 if (tag.startsWith("msg-id="))            msgId        = tag.substring(7);
+                if (tag.startsWith("id="))                msgIdTag     = tag.substring(3); // ID único del mensaje
             }
             line = line.substring(line.indexOf(' ') + 1);
         }
@@ -87,18 +94,19 @@ public class TwitchChatReader implements Runnable {
         if (cheerAmount != null) {
             queue.put(new ChatMessage("twitch", user, text,
                     emotesHeader, badgesHeader, userColor,
-                    "cheer", cheerAmount));
+                    "cheer", cheerAmount, null, msgIdTag, null));
         } else if (rewardId != null) {
             queue.put(new ChatMessage("twitch", user, text,
                     emotesHeader, badgesHeader, userColor,
-                    "reward", "Recompensa de canal"));
+                    "reward", "Recompensa de canal", null, msgIdTag, null));
         } else if ("highlighted-message".equals(msgId)) {
             queue.put(new ChatMessage("twitch", user, text,
                     emotesHeader, badgesHeader, userColor,
-                    "reward", "Mensaje destacado"));
+                    "reward", "Mensaje destacado", null, msgIdTag, null));
         } else {
             queue.put(new ChatMessage("twitch", user, text,
-                    emotesHeader, badgesHeader, userColor));
+                    emotesHeader, badgesHeader, userColor,
+                    null, null, null, msgIdTag, null));
         }
     }
 
@@ -136,6 +144,50 @@ public class TwitchChatReader implements Runnable {
                 queue.put(new ChatMessage("twitch", displayName, systemMsg != null ? systemMsg : "",
                         null, badgesHeader, userColor, "subgift", extra));
             }
+        }
+    }
+
+    private void handleClearchat(String line) throws InterruptedException {
+        // Formato: @ban-duration=X;... :tmi.twitch.tv CLEARCHAT #canal :usuario
+        // Si no hay usuario al final es un /clear de todo el chat
+        String targetUser = null;
+        int lastColon = line.lastIndexOf(':');
+        int clearchatPos = line.indexOf("CLEARCHAT");
+
+        if (lastColon > clearchatPos) {
+            String afterCommand = line.substring(lastColon + 1).trim();
+            if (!afterCommand.contains("CLEARCHAT")) {
+                targetUser = afterCommand;
+            }
+        }
+
+        if (targetUser != null && !targetUser.isBlank()) {
+            queue.put(new ChatMessage("twitch", null, null,
+                    null, null, null,
+                    "clearchat", null, targetUser, null, null));
+        } else {
+            queue.put(new ChatMessage("twitch", null, null,
+                    null, null, null,
+                    "clearall", null, null, null, null));
+        }
+    }
+
+    private void handleClearmsg(String line) throws InterruptedException {
+        System.err.println("[Twitch DEBUG] CLEARMSG recibido: " + line);
+        // Formato: @login=usuario;target-msg-id=UUID :tmi.twitch.tv CLEARMSG #canal :texto
+        String targetMsgId = null;
+        String targetUser  = null;
+
+        if (line.startsWith("@")) {
+            String tags = line.substring(1, line.indexOf(' '));
+            for (String tag : tags.split(";")) {
+                if (tag.startsWith("target-msg-id=")) targetMsgId = tag.substring(14);
+                if (tag.startsWith("login="))         targetUser  = tag.substring(6);
+            }
+        }
+
+        if (targetMsgId != null) {
+            queue.put(new ChatMessage("twitch", "clearmsg", targetUser, targetMsgId));
         }
     }
 

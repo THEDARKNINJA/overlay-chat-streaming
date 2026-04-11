@@ -28,6 +28,7 @@ public class YouTubeChatReader implements Runnable {
     private YouTube youtube;
     private int currentKeyIndex = 0;
     private boolean quotaExceeded = false;
+    private String resolvedVideoId = null;
 
     public YouTubeChatReader(String channelId, String videoId, List<String> apiKeys,
                              BlockingQueue<ChatMessage> queue, Config config) {
@@ -119,12 +120,13 @@ public class YouTubeChatReader implements Runnable {
         }
     }
 
-    private String resolveLiveChatId() {
+    private String resolveLiveChatId() throws QuotaExceededException {
         System.err.println("[YouTube] Resolviendo liveChatId...");
         if (configVideoId != null && !configVideoId.isBlank()) {
             String chatId = getLiveChatId(configVideoId);
             if (chatId != null) {
                 System.err.println("[YouTube] Conectado usando videoId del config.");
+                resolvedVideoId = configVideoId;
                 return chatId;
             }
             System.err.println("[YouTube] videoId del config no tiene chat activo, buscando directo...");
@@ -136,6 +138,7 @@ public class YouTubeChatReader implements Runnable {
                 String chatId = getLiveChatId(foundVideoId);
                 if (chatId != null) {
                     System.err.println("[YouTube] Directo encontrado: " + foundVideoId);
+                    resolvedVideoId = foundVideoId;
                     try {
                         config.saveYouTube(foundVideoId);
                     } catch (IOException ex) {
@@ -171,6 +174,12 @@ public class YouTubeChatReader implements Runnable {
 
             return chatId;
 
+        } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
+            if (e.getStatusCode() == 403 && e.getMessage().contains("quota")) {
+                throw new QuotaExceededException("Quota excedida: " + e.getMessage());
+            }
+            System.err.println("[YouTube] Error consultando videoId: " + e.getMessage());
+            return null;
         } catch (Exception e) {
             System.err.println("[YouTube] Error consultando videoId: " + e.getMessage());
             return null;
@@ -194,6 +203,12 @@ public class YouTubeChatReader implements Runnable {
 
             return response.getItems().get(0).getId().getVideoId();
 
+        } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
+            if (e.getStatusCode() == 403 && e.getMessage().contains("quota")) {
+                throw new QuotaExceededException("Quota excedida: " + e.getMessage());
+            }
+            System.err.println("[YouTube] Error buscando directo: " + e.getMessage());
+            return null;
         } catch (Exception e) {
             System.err.println("[YouTube] Error buscando directo: " + e.getMessage());
             return null;
@@ -203,39 +218,58 @@ public class YouTubeChatReader implements Runnable {
     private void readChat(String liveChatId) throws Exception {
         System.err.println("[YouTube] Leyendo chat: " + liveChatId);
 
-        // Primera petición para sincronizar pageToken sin procesar histórico
-        String url = "https://www.googleapis.com/youtube/v3/liveChat/messages" +
-                     "?liveChatId=" + liveChatId +
-                     "&part=snippet" +
-                     "&maxResults=1" +
-                     "&key=" + currentApiKey();
+        // Intentar recuperar pageToken guardado si el videoId coincide
+        String pageToken = null;
+        String lastVideoId = config.getYoutubeLastVideoId();
+        String lastPageToken = config.getYoutubeLastPageToken();
 
-        String rawJson = fetch(url);
-        org.json.JSONObject firstResponse = new org.json.JSONObject(rawJson);
-        checkForErrors(firstResponse);
+        if (resolvedVideoId != null && resolvedVideoId.equals(lastVideoId) 
+                && lastPageToken != null) {
+            System.err.println("[YouTube] Usando pageToken guardado, saltando histórico.");
+            pageToken = lastPageToken;
+        } else {
+            // Primera petición para sincronizar sin procesar histórico
+            String url = "https://www.googleapis.com/youtube/v3/liveChat/messages" +
+                        "?liveChatId=" + liveChatId +
+                        "&part=snippet" +
+                        "&maxResults=1" +
+                        "&key=" + currentApiKey();
 
-        String pageToken = firstResponse.optString("nextPageToken", null);
-        long pollingInterval = Math.max(MIN_POLLING_INTERVAL,
-                                        firstResponse.getLong("pollingIntervalMillis"));
-        sleep(pollingInterval);
+            String rawJson = fetch(url);
+            org.json.JSONObject firstResponse = new org.json.JSONObject(rawJson);
+            checkForErrors(firstResponse);
+            pageToken = firstResponse.optString("nextPageToken", null);
 
-        System.out.println("[YouTube] Sincronizado, empezando a leer mensajes nuevos.");
+            long pollingInterval = Math.max(MIN_POLLING_INTERVAL,
+                                            firstResponse.getLong("pollingIntervalMillis"));
+            sleep(pollingInterval);
+            System.out.println("[YouTube] Sincronizado, empezando a leer mensajes nuevos.");
+        }
 
         while (!Thread.currentThread().isInterrupted()) {
-            url = "https://www.googleapis.com/youtube/v3/liveChat/messages" +
-                  "?liveChatId=" + liveChatId +
-                  "&part=snippet,authorDetails" +
-                  "&maxResults=200" +
-                  "&key=" + currentApiKey() +
-                  (pageToken != null ? "&pageToken=" + pageToken : "");
+            String url = "https://www.googleapis.com/youtube/v3/liveChat/messages" +
+                        "?liveChatId=" + liveChatId +
+                        "&part=snippet,authorDetails" +
+                        "&maxResults=200" +
+                        "&key=" + currentApiKey() +
+                        (pageToken != null ? "&pageToken=" + pageToken : "");
 
-            rawJson = fetch(url);
+            String rawJson = fetch(url);
             org.json.JSONObject response = new org.json.JSONObject(rawJson);
             checkForErrors(response);
 
-            pollingInterval = Math.max(MIN_POLLING_INTERVAL,
-                                       response.getLong("pollingIntervalMillis"));
+            long pollingInterval = Math.max(MIN_POLLING_INTERVAL,
+                                            response.getLong("pollingIntervalMillis"));
             pageToken = response.optString("nextPageToken", null);
+
+            // Guardar pageToken en config después de cada petición exitosa
+            if (pageToken != null && resolvedVideoId != null) {
+                try {
+                    config.saveYoutubePageToken(resolvedVideoId, pageToken);
+                } catch (IOException e) {
+                    System.err.println("[Config] Error guardando pageToken: " + e.getMessage());
+                }
+            }
 
             org.json.JSONArray items = response.optJSONArray("items");
             if (items != null) {
@@ -245,7 +279,6 @@ public class YouTubeChatReader implements Runnable {
 
                     if (!"textMessageEvent".equals(snippet.getString("type"))) continue;
 
-                    // Filtrar mensajes anteriores al arranque
                     String publishedAt = snippet.optString("publishedAt", null);
                     if (publishedAt != null) {
                         long msgTime = java.time.Instant.parse(publishedAt).toEpochMilli();
@@ -257,7 +290,7 @@ public class YouTubeChatReader implements Runnable {
 
                     List<EmoteToken> tokens = youtubeEmojiCache.tokenize(snippet);
                     String text = snippet.getJSONObject("textMessageDetails")
-                                         .getString("messageText");
+                                        .getString("messageText");
 
                     queue.put(new ChatMessage("youtube", user, text, tokens));
                 }
@@ -326,11 +359,11 @@ public class YouTubeChatReader implements Runnable {
         }
     }
 
-    private static class QuotaExceededException extends Exception {
+    private static class QuotaExceededException extends RuntimeException  {
         QuotaExceededException(String message) { super(message); }
     }
 
-    private static class ChatEndedException extends Exception {
+    private static class ChatEndedException extends RuntimeException  {
         ChatEndedException(String message) { super(message); }
     }
 }
