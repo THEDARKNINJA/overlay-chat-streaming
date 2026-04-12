@@ -18,11 +18,14 @@ com\chatoverlaystreaming\overlay\ChatOverlay$11.class
 com\chatoverlaystreaming\emotes\EmoteRenderer.class
 com\chatoverlaystreaming\emotes\ImageCache$1.class
 com\chatoverlaystreaming\emotes\YouTubeEmojiCache.class
+com\chatoverlaystreaming\overlay\WrapEditorKitPro$SmartWrapLabelView.class
 com\chatoverlaystreaming\Logger$1.class
 com\chatoverlaystreaming\Main.class
+com\chatoverlaystreaming\overlay\WrapEditorKitPro$WrapColumnFactoryPro.class
 com\chatoverlaystreaming\readers\TwitchChatReader.class
 com\chatoverlaystreaming\emotes\CenteredIcon.class
 com\chatoverlaystreaming\overlay\ChatOverlay$1.class
+com\chatoverlaystreaming\overlay\WrapEditorKitPro.class
 com\chatoverlaystreaming\readers\YouTubeChatReader.class
 com\chatoverlaystreaming\overlay\ChatOverlay$14.class
 com\chatoverlaystreaming\overlay\ChatOverlay$5.class

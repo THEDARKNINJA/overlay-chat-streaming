@@ -16,8 +16,8 @@ import java.util.function.Consumer;
 
 public class ViewerCountService {
 
-    private static final long TWITCH_INTERVAL  = 60000; // 60 segundos
-    private static final long YOUTUBE_INTERVAL = 60000;
+    private long twitch_interval;
+    private long youtube_interval;
 
     private final Config config;
     private final Consumer<String> onTwitchUpdate;  // callback con el nuevo valor
@@ -32,6 +32,12 @@ public class ViewerCountService {
         this.config          = config;
         this.onTwitchUpdate  = onTwitchUpdate;
         this.onYoutubeUpdate = onYoutubeUpdate;
+        this.twitch_interval = config.getTwitchSpectatorUpdate() * 1000;
+        if(this.twitch_interval < 30000)
+            this.twitch_interval = 30000;
+        this.youtube_interval = config.getYoutubeSpectatorUpdate() * 1000;
+        if(this.youtube_interval < 30000)
+            this.youtube_interval = 30000;
     }
 
     public void start() {
@@ -45,7 +51,7 @@ public class ViewerCountService {
                     System.err.println("[Viewers] Error Twitch: " + e.getMessage());
                     onTwitchUpdate.accept("?");
                 }
-                sleep(TWITCH_INTERVAL);
+                sleep(twitch_interval);
             }
         }, "twitch-viewers");
         twitchThread.setDaemon(true);
@@ -61,7 +67,7 @@ public class ViewerCountService {
                     System.err.println("[Viewers] Error YouTube: " + e.getMessage());
                     onYoutubeUpdate.accept("?");
                 }
-                sleep(YOUTUBE_INTERVAL);
+                sleep(youtube_interval);
             }
         }, "youtube-viewers");
         youtubeThread.setDaemon(true);
@@ -80,7 +86,7 @@ public class ViewerCountService {
         if (cachedTwitchToken == null) {
             cachedTwitchToken = fetchTwitchToken();
         }
-
+        
         String url = "https://api.twitch.tv/helix/streams?user_login=" +
                      config.getTwitchChannel();
 

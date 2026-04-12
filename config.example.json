@@ -3,9 +3,11 @@
     "channel": "nombre_del_canal",
     "channelId": "123456789",
     "clientId": "tu_client_id",
-    "clientSecret": "tu_client_secret_aqui"
+    "clientSecret": "tu_client_secret_aqui",
+    "timeSpectatorUpdate": "60"
   },
   "youtube": {
+    "timeSpectatorUpdate": "60",
     "channelId": "UCxxxxxx",
     "videoId": "ID_DEL_VIDEO",
     "apiKeys": ["TU_API_KEY",
@@ -24,6 +26,8 @@
     "iconSize": 16
   },
   "misc": {
+    "canClickLink": true,
+    "showViewerCount": true,
     "minPollingInterval": 8
   }
 }

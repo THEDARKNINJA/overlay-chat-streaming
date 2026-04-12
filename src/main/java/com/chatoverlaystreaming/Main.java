@@ -1,5 +1,6 @@
 package com.chatoverlaystreaming;
 
+import com.chatoverlaystreaming.emotes.ImageCache;
 import com.chatoverlaystreaming.model.ChatMessage;
 import com.chatoverlaystreaming.overlay.ChatOverlay;
 import com.chatoverlaystreaming.overlay.Config;
@@ -19,12 +20,14 @@ public class Main {
         Config config;
         try {
             config = new Config();
+            // config.descargarImagenesDesdeJsonObject(); // para descargar los emojis de YT
         } catch (Exception e) {
             System.err.println("Error cargando configuración: " + e.getMessage());
             return;
         }
 
         BlockingQueue<ChatMessage> queue = new LinkedBlockingQueue<>(500);
+        ImageCache sharedImageCache = new ImageCache(config.getIconSize());
 
         // Iniciar lectores
         Thread twitchThread = new Thread(
@@ -37,7 +40,7 @@ public class Main {
                 new YouTubeChatReader(config.getYoutubeChannelId(),
                                       config.getYoutubeVideoId(),
                                       config.getYoutubeApiKeys(),
-                                      queue, config),
+                                      queue, config, sharedImageCache),
                 "youtube-reader");
         youtubeThread.setDaemon(true);
         youtubeThread.start();
@@ -49,7 +52,7 @@ public class Main {
                     config.getTwitchChannelId(),
                     config.getTwitchClientId(),
                     config.getTwitchClientSecret(),
-                    config
+                    config, sharedImageCache
                 );
                 overlay.setVisible(true);
                 overlay.initNativeFeatures();

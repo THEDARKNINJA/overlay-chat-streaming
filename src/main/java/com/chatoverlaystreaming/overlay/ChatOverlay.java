@@ -3,6 +3,7 @@ package com.chatoverlaystreaming.overlay;
 import com.chatoverlaystreaming.emotes.*;
 import com.chatoverlaystreaming.model.ChatMessage;
 import com.chatoverlaystreaming.model.EmoteToken;
+import com.chatoverlaystreaming.service.ViewerCountService;
 
 import javax.swing.*;
 import javax.swing.text.*;
@@ -12,6 +13,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +40,7 @@ public class ChatOverlay extends JFrame {
     private Rectangle closeButtonRect = new Rectangle();
     private Rectangle resizeHandleRect = new Rectangle();
     private boolean showBackground;
+    private boolean canClickLink;
     private boolean isLocked = true;
     private boolean hasFocus = false;
     private String twitchViewers  = "?";
@@ -53,9 +56,11 @@ public class ChatOverlay extends JFrame {
                        String twitchChannelId,
                        String twitchClientId,
                        String twitchClientSecret, 
-                       Config config) {
+                       Config config, ImageCache sharedImageCache) {
 
         this.config = config;
+        canClickLink = config.getCanClickLink();
+        textPane = new JTextPane();
 
         twitchIcon  = loadIcon("/icons/twitch.png", 14);
         youtubeIcon = loadIcon("/icons/youtube.png", 14);
@@ -69,7 +74,7 @@ public class ChatOverlay extends JFrame {
         setSize(config.getPanelWidth(), config.getPanelHeight());
         setLocation(config.getPanelX(), config.getPanelY());
         this.showBackground = config.getShowBackground();
-        emoteRenderer    = new EmoteRenderer(config.getIconSize());
+        emoteRenderer    = new EmoteRenderer(config.getIconSize(), textPane, sharedImageCache);
         
         saveTimer = new javax.swing.Timer(500, e -> {
             try {
@@ -266,8 +271,8 @@ public class ChatOverlay extends JFrame {
         panel.add(viewerPanel, BorderLayout.SOUTH);
 
         // Área de texto
-        textPane = new JTextPane();
         textPane.setEditable(false);
+        textPane.setEditorKit(new WrapEditorKitPro()); // la clase para poder editar las palabras demasiado largas
         textPane.setOpaque(false);
         textPane.setBackground(new Color(0, 0, 0, 0));
         textPane.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 13));
@@ -319,6 +324,52 @@ public class ChatOverlay extends JFrame {
             }
             
         });
+
+        //Si puede clickar enlaces,  define los eventos
+        if(canClickLink){
+            textPane.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    try {
+                        int pos = textPane.viewToModel2D(e.getPoint());
+                        if (pos < 0) return;
+
+                        StyledDocument doc = textPane.getStyledDocument();
+                        Element elem = doc.getCharacterElement(pos);
+
+                        String url = (String) elem.getAttributes().getAttribute("link");
+                        if (url != null) {
+                            Desktop.getDesktop().browse(new URI(url));
+                        }
+
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            });
+
+            textPane.addMouseMotionListener(new MouseMotionAdapter() {
+                @Override
+                public void mouseMoved(MouseEvent e) {
+                    try {
+                        int pos = textPane.viewToModel2D(e.getPoint());
+                        if (pos < 0) {
+                            textPane.setToolTipText(null);
+                            return;
+                        }
+
+                        StyledDocument doc = textPane.getStyledDocument();
+                        Element elem = doc.getCharacterElement(pos);
+
+                        String url = (String) elem.getAttributes().getAttribute("link");
+                        textPane.setToolTipText(url);
+
+                    } catch (Exception ex) {
+                        textPane.setToolTipText(null);
+                    }
+                }
+            });
+        }
 
         dragBar.addMouseListener(new MouseAdapter() {
             @Override
@@ -450,8 +501,24 @@ public class ChatOverlay extends JFrame {
             }
         });
 
+        /*
         if (SystemTray.isSupported()) {
             setupTrayIcon();
+        } */
+
+        if (config.getShowViewerCount()) {
+            ViewerCountService viewerService = new ViewerCountService(
+                config,
+                count -> SwingUtilities.invokeLater(() -> {
+                    twitchViewers = count;
+                    viewerPanel.repaint();
+                }),
+                count -> SwingUtilities.invokeLater(() -> {
+                    youtubeViewers = count;
+                    viewerPanel.repaint();
+                })
+            );
+            viewerService.start();
         }
     }
 
@@ -493,7 +560,6 @@ public class ChatOverlay extends JFrame {
             System.err.println("[Overlay] No se pudo añadir el icono a la bandeja.");
         }
     }
-        */
 
     private void setupTrayIcon() {
         SystemTray tray = SystemTray.getSystemTray();
@@ -601,6 +667,7 @@ public class ChatOverlay extends JFrame {
 
         popup.show(popupWindow, 0, 0);
     }
+        */
 
     private void appendMessage(ChatMessage msg) {
         try {

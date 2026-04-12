@@ -1,11 +1,20 @@
 package com.chatoverlaystreaming.overlay;
 
 import org.json.JSONObject;
+
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
+
+// Descargado de emojis custom de YT
+//import java.util.Iterator;
+//import java.net.URL;
+
 
 public class Config {
 
@@ -32,24 +41,27 @@ public class Config {
 
     }
 
-    public String getTwitchChannel()   { return twitch.getString("channel");   }
-    public String getTwitchChannelId() { return twitch.getString("channelId"); }
-    public String getTwitchClientId() { return twitch.getString("clientId"); }
-    public String getTwitchClientSecret() { return twitch.getString("clientSecret"); }
-    public String getYoutubeChannelId()  { return youtube.getString("channelId");  }
-    public String getYoutubeVideoId()  { return youtube.getString("videoId");  }
+    public String getTwitchChannel()   { return twitch.optString("channel", "");   }
+    public String getTwitchChannelId() { return twitch.optString("channelId", ""); }
+    public String getTwitchClientId() { return twitch.optString("clientId", ""); }
+    public String getTwitchClientSecret() { return twitch.optString("clientSecret", ""); }
+    public long getTwitchSpectatorUpdate() { return twitch.optLong("timeSpectatorUpdate", 60); }
+    public String getYoutubeChannelId()  { return youtube.optString("channelId", "");  }
+    public String getYoutubeVideoId()  { return youtube.optString("videoId", "");  }
     public String getYoutubeApiKey()   { return getYoutubeApiKeys().get(0);   }
     public String getYoutubeLastPageToken() { return youtube.optString("lastPageToken", null);  }
     public String getYoutubeLastVideoId() { return youtube.optString("lastVideoId", null); }
-    public int getPanelX()   { return panel.getInt("x");   }
-    public int getPanelY()   { return panel.getInt("y");   }
-    public int getPanelWidth()   { return panel.getInt("width");   }
-    public int getPanelHeight()   { return panel.getInt("height");   }
-    public int getPanelAlpha()   { return panel.getInt("alpha");   }
-    public boolean getShowBackground() { return panel.getBoolean("showBackground"); }
-    public int getIconSize() { return panel.getInt("iconSize"); }
-    public int getMinPollingInterval() { return misc.getInt("minPollingInterval"); }
-    public boolean getShowViewerCount() { return misc.getBoolean("showViewerCount"); }
+    public long getYoutubeSpectatorUpdate()  { return youtube.optLong("timeSpectatorUpdate", 60);  }
+    public int getPanelX()   { return panel.optInt("x", 10);   }
+    public int getPanelY()   { return panel.optInt("y", 150);   }
+    public int getPanelWidth()   { return panel.optInt("width", 400);   }
+    public int getPanelHeight()   { return panel.optInt("height", 450);   }
+    public int getPanelAlpha()   { return panel.optInt("alpha", 200);   }
+    public boolean getShowBackground() { return panel.optBoolean("showBackground", true); }
+    public int getIconSize() { return panel.optInt("iconSize", 13); }
+    public int getMinPollingInterval() { return misc.optInt("minPollingInterval", 8); }
+    public boolean getShowViewerCount() { return misc.optBoolean("showViewerCount", true); }
+    public boolean getCanClickLink() { return misc.optBoolean("canClickLink", true); }
 
     public List<String> getYoutubeApiKeys() {
         // Soportar tanto apiKeys (array) como apiKey (string único)
@@ -98,4 +110,60 @@ public class Config {
         youtube.put("lastPageToken", pageToken);
         Files.writeString(Paths.get("config.json"), root.toString(2));
     }
+
+    // Si se van a descargar nuevos emojis de youtube,
+    // rehacer el JSON y descomentar esto, los imports de arriba
+    // y la línea del Main
+    /* 
+    public void descargarImagenesDesdeJsonObject() {
+        try {
+
+        Path configPath = Paths.get("youtube_custom_emojis.json");
+        if (!Files.exists(configPath)) {
+            throw new IOException(
+                "No se encontró config.json. " +
+                "Crea el archivo en la carpeta del proyecto."
+            );
+        }
+        String content = Files.readString(configPath);
+        JSONObject json = new JSONObject(content);
+
+            // Crear carpeta imgs si no existe
+            File carpeta = new File("youtube_emojis");
+            if (!carpeta.exists()) {
+                carpeta.mkdirs();
+            }
+
+            // Iterar keys del JSON
+            Iterator<String> keys = json.keys();
+
+            while (keys.hasNext()) {
+                String key = keys.next();
+                String url = json.getString(key);
+
+                try (InputStream in = new URL(url).openStream()) {
+
+                    // Limpiar caracteres inválidos en nombre de archivo
+                    String safeKey = key.replaceAll("[:\\\\/*?\"<>|]", "");
+
+                    // Detectar extensión básica
+                    String extension = ".png";
+
+                    String fileName = "youtube_emojis/" + safeKey.replaceAll("^:+|:+$", "") + extension;
+
+                    Files.copy(in, Paths.get(fileName));
+
+                    System.out.println("Descargado: " + fileName);
+
+                } catch (Exception e) {
+                    System.err.println("Error con " + key + ": " + e.getMessage());
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    */
+    
 }

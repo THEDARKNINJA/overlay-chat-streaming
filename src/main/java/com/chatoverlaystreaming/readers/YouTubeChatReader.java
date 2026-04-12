@@ -1,5 +1,6 @@
 package com.chatoverlaystreaming.readers;
 
+import com.chatoverlaystreaming.emotes.ImageCache;
 import com.chatoverlaystreaming.emotes.YouTubeEmojiCache;
 import com.chatoverlaystreaming.model.ChatMessage;
 import com.chatoverlaystreaming.model.EmoteToken;
@@ -15,7 +16,7 @@ import java.util.concurrent.BlockingQueue;
 public class YouTubeChatReader implements Runnable {
 
     private static final long RETRY_INTERVAL    = 180000; // 3 minutos
-    private static final long MIN_POLLING_INTERVAL = 10000; // 10 segundos mínimo
+    private long min_polling_interval;
     private final long startTime = System.currentTimeMillis();
 
     private final String channelId;
@@ -23,7 +24,7 @@ public class YouTubeChatReader implements Runnable {
     private final List<String> apiKeys;
     private final Config config;
     private final BlockingQueue<ChatMessage> queue;
-    private final YouTubeEmojiCache youtubeEmojiCache = new YouTubeEmojiCache();
+    private final YouTubeEmojiCache youtubeEmojiCache;
 
     private YouTube youtube;
     private int currentKeyIndex = 0;
@@ -31,12 +32,15 @@ public class YouTubeChatReader implements Runnable {
     private String resolvedVideoId = null;
 
     public YouTubeChatReader(String channelId, String videoId, List<String> apiKeys,
-                             BlockingQueue<ChatMessage> queue, Config config) {
+                         BlockingQueue<ChatMessage> queue, Config config,
+                         ImageCache imageCache) {
         this.channelId     = channelId;
         this.configVideoId = videoId;
         this.apiKeys       = apiKeys;
         this.config        = config;
         this.queue         = queue;
+        this.youtubeEmojiCache = new YouTubeEmojiCache(imageCache);
+        this.min_polling_interval = config.getMinPollingInterval() * 1000;
     }
 
     private String currentApiKey() {
@@ -240,7 +244,7 @@ public class YouTubeChatReader implements Runnable {
             checkForErrors(firstResponse);
             pageToken = firstResponse.optString("nextPageToken", null);
 
-            long pollingInterval = Math.max(MIN_POLLING_INTERVAL,
+            long pollingInterval = Math.max(min_polling_interval,
                                             firstResponse.getLong("pollingIntervalMillis"));
             sleep(pollingInterval);
             System.out.println("[YouTube] Sincronizado, empezando a leer mensajes nuevos.");
@@ -258,7 +262,7 @@ public class YouTubeChatReader implements Runnable {
             org.json.JSONObject response = new org.json.JSONObject(rawJson);
             checkForErrors(response);
 
-            long pollingInterval = Math.max(MIN_POLLING_INTERVAL,
+            long pollingInterval = Math.max(min_polling_interval,
                                             response.getLong("pollingIntervalMillis"));
             pageToken = response.optString("nextPageToken", null);
 

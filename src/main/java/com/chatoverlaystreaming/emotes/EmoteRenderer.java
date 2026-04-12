@@ -8,6 +8,8 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.net.URI;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class EmoteRenderer {
 
@@ -32,10 +34,17 @@ public class EmoteRenderer {
     private final ImageIcon TWITCH_ICON;
     private final ImageIcon YOUTUBE_ICON;
     private final int iconSize;
+    private final JTextPane textPane;
+    private static final Pattern URL_PATTERN = Pattern.compile("(https?://\\S+)", Pattern.CASE_INSENSITIVE);
 
-    public EmoteRenderer(int iconSize) {
+    private boolean clickHandlerInstalled = false;
+
+
+    public EmoteRenderer(int iconSize, JTextPane textPane, ImageCache sharedImageCache) {
+        this.textPane = textPane;
+        this.imageCache = sharedImageCache;
         this.iconSize = iconSize;
-        this.imageCache = new ImageCache(iconSize);
+        //this.imageCache = new ImageCache(iconSize);
         TWITCH_ICON  = loadResourceIcon("/icons/twitch.png");
         YOUTUBE_ICON = loadResourceIcon("/icons/youtube.png");
     }
@@ -177,13 +186,56 @@ public class EmoteRenderer {
         StyleConstants.setForeground(textStyle, TEXT_COLOR);
         StyleConstants.setBold(textStyle, false);
         for (EmoteToken token : tokens) {
+            
             switch (token) {
-                case EmoteToken.Text t ->
-                    doc.insertString(doc.getLength(), t.content(), textStyle);
+                case EmoteToken.Text t -> {
+                    //doc.insertString(doc.getLength(), t.content(), textStyle);
+                    String content = t.content();
+                    Matcher m = URL_PATTERN.matcher(content);
+
+                    int last = 0;
+                    while (m.find()) {
+                        if (m.start() > last) {
+                            doc.insertString(doc.getLength(),
+                                    content.substring(last, m.start()), textStyle);
+                        }
+
+                        String url = m.group();
+                        String shortUrl = shortenUrl(url, 40);
+
+                        insertClickableUrl(doc, shortUrl, url, textStyle);
+
+                        last = m.end();
+                    }
+
+                    if (last < content.length()) {
+                        doc.insertString(doc.getLength(),
+                                content.substring(last), textStyle);
+                    }
+                }
                 case EmoteToken.Emote e -> {
                     ImageIcon icon = imageCache.get(e.url());
-                    if (icon != null) insertIcon(doc, icon, e.name(), textStyle);
-                    else doc.insertString(doc.getLength(), e.name(), textStyle);
+                    if (icon != null) {
+                        insertIcon(doc, icon, e.name(), textStyle);
+                    } else {
+                        doc.insertString(doc.getLength(), e.name(), textStyle);
+                    }
+                    /* 
+                    ImageIcon icon;
+                    if (e.url() != null && e.url().startsWith("local:")) {
+                        // Emoji local de YouTube
+                        // icon = youtubeEmojiCache.getLocalIcon(e.name());
+                            String filename = e.name().replace(":", "");
+                            icon = imageCache.get(filename);
+                    } else {
+                        icon = imageCache.get(e.url());
+                    }
+                    if (icon != null) {
+                        insertIcon(doc, icon, e.name(), textStyle);
+                    } else {
+                        doc.insertString(doc.getLength(), e.name(), textStyle);
+                    }
+                        */
                 }
             }
         }
@@ -223,4 +275,36 @@ public class EmoteRenderer {
         StyleConstants.setIcon(iconStyle, centered);
         doc.insertString(doc.getLength(), " ", iconStyle);
     }
+    
+
+    public ImageCache getImageCache() {
+        return imageCache;
+    }
+
+    public static String shortenUrl(String url, int maxLen) {
+        if (url.length() <= maxLen) return url;
+
+        int keep = (maxLen - 1) / 2;
+        String start = url.substring(0, keep);
+        String end   = url.substring(url.length() - keep);
+
+        return start + "…" + end;
+    }
+
+    private void insertClickableUrl(StyledDocument doc,
+                                String visible,
+                                String fullUrl,
+                                AttributeSet baseStyle)
+        throws BadLocationException {
+
+        SimpleAttributeSet linkStyle = new SimpleAttributeSet(baseStyle);
+        StyleConstants.setForeground(linkStyle, new Color(120, 180, 255));
+        StyleConstants.setUnderline(linkStyle, true);
+
+        // Marcamos el enlace para que ChatOverlay lo detecte
+        linkStyle.addAttribute("link", fullUrl);
+
+        doc.insertString(doc.getLength(), visible, linkStyle);
+    }
+
 }

@@ -48,7 +48,7 @@ public class TwitchChatReader implements Runnable {
                 writer.println("PONG :tmi.twitch.tv");
                 continue;
             }
-
+            
             if (line.contains("PRIVMSG")) {
                 handlePrivmsg(line);
             } else if (line.contains("USERNOTICE")) {
@@ -58,7 +58,7 @@ public class TwitchChatReader implements Runnable {
             } else if (line.contains("CLEARMSG")) {
                 handleClearmsg(line);
             }
-            System.err.println("[Twitch IRC] " + line);
+            //System.err.println("[Twitch IRC] " + line);
         }
     }
 

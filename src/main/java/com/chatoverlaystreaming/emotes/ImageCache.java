@@ -43,6 +43,7 @@ public class ImageCache {
     }
         */
     private ImageIcon download(String url) {
+        if (url == null || url.startsWith("local:")) return null; // nunca descargar URLs locales
         try {
             BufferedImage img = ImageIO.read(URI.create(url).toURL());
             if (img == null) return null;
@@ -58,5 +59,8 @@ public class ImageCache {
             System.err.println("[ImageCache] No se pudo descargar: " + url);
             return null;
         }
+    }
+    public synchronized void put(String url, ImageIcon icon) {
+        cache.put(url, icon);
     }
 }
