@@ -4,7 +4,9 @@ import com.chatoverlaystreaming.emotes.ImageCache;
 import com.chatoverlaystreaming.model.ChatMessage;
 import com.chatoverlaystreaming.overlay.ChatOverlay;
 import com.chatoverlaystreaming.overlay.Config;
+import com.chatoverlaystreaming.overlay.TwitchAuth;
 import com.chatoverlaystreaming.readers.TwitchChatReader;
+import com.chatoverlaystreaming.readers.TwitchEventSub;
 import com.chatoverlaystreaming.readers.YouTubeChatReader;
 import javax.swing.*;
 import java.util.concurrent.BlockingQueue;
@@ -29,10 +31,33 @@ public class Main {
         BlockingQueue<ChatMessage> queue = new LinkedBlockingQueue<>(500);
         ImageCache sharedImageCache = new ImageCache(config.getIconSize());
 
+        TwitchAuth twitchAuth = new TwitchAuth(config.getTwitchClientId(), config);
+        String accessToken;
+        String twitchLogin;
+        try {
+            accessToken  = twitchAuth.getValidToken();
+            twitchLogin  = twitchAuth.getLoginFromToken(accessToken);
+            System.out.println("[Auth] Conectado como: " + twitchLogin);
+        } catch (Exception e) {
+            System.err.println("[Auth] Error de autenticación: " + e.getMessage());
+            System.err.println("[Auth] Conectando en modo anónimo...");
+            accessToken = null;
+            twitchLogin = null;
+        }
+
+        if (accessToken != null) {
+            Thread eventSubThread = new Thread(
+                    new TwitchEventSub(accessToken, config.getTwitchClientId(),
+                                    config.getTwitchChannelId(), queue),
+                    "twitch-eventsub");
+            eventSubThread.setDaemon(true);
+            eventSubThread.start();
+        }
+
         // Iniciar lectores
         Thread twitchThread = new Thread(
-                new TwitchChatReader(config.getTwitchChannel(), queue),
-                "twitch-reader");
+                            new TwitchChatReader(config.getTwitchChannel(), queue, accessToken, twitchLogin),
+                            "twitch-reader");
         twitchThread.setDaemon(true);
         twitchThread.start();
 

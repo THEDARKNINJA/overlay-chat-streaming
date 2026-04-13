@@ -27,7 +27,7 @@ public class YouTubeEmojiCache {
     // Caché en memoria de imágenes ya cargadas desde disco
     // private final Map<String, ImageIcon> imageCache = new HashMap<>();
     private final ImageCache imageCache;
-    private final Map<String, ImageIcon> localCache = new HashMap<>();
+    //private final Map<String, ImageIcon> localCache = new HashMap<>();
 
     public YouTubeEmojiCache(ImageCache imageCache) {
         this.imageCache = imageCache;

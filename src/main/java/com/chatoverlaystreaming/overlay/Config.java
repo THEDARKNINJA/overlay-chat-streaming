@@ -46,6 +46,8 @@ public class Config {
     public String getTwitchClientId() { return twitch.optString("clientId", ""); }
     public String getTwitchClientSecret() { return twitch.optString("clientSecret", ""); }
     public long getTwitchSpectatorUpdate() { return twitch.optLong("timeSpectatorUpdate", 60); }
+    public String getTwitchAccessToken() { return twitch.optString("accessToken", null); }
+    public String getTwitchRefreshToken() { return twitch.optString("refreshToken", null); }
     public String getYoutubeChannelId()  { return youtube.optString("channelId", "");  }
     public String getYoutubeVideoId()  { return youtube.optString("videoId", "");  }
     public String getYoutubeApiKey()   { return getYoutubeApiKeys().get(0);   }
@@ -108,6 +110,13 @@ public class Config {
     public void saveYoutubePageToken(String videoId, String pageToken) throws IOException {
         youtube.put("lastVideoId", videoId);
         youtube.put("lastPageToken", pageToken);
+        Files.writeString(Paths.get("config.json"), root.toString(2));
+    }
+
+
+    public void saveTwitchTokens(String accessToken, String refreshToken) throws IOException {
+        twitch.put("accessToken", accessToken);
+        twitch.put("refreshToken", refreshToken);
         Files.writeString(Paths.get("config.json"), root.toString(2));
     }
 

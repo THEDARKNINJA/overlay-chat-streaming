@@ -10,10 +10,14 @@ public class TwitchChatReader implements Runnable {
 
     private final String channel;
     private final BlockingQueue<ChatMessage> queue;
+    private final String oauthToken;
+    private final String twitchLogin;
 
-    public TwitchChatReader(String channel, BlockingQueue<ChatMessage> queue) {
-        this.channel = channel.toLowerCase();
-        this.queue   = queue;
+    public TwitchChatReader(String channel, BlockingQueue<ChatMessage> queue, String oauthToken, String twitchLogin) {
+        this.channel     = channel.toLowerCase();
+        this.queue       = queue;
+        this.oauthToken  = oauthToken;
+        this.twitchLogin = twitchLogin;
     }
 
     @Override
@@ -37,13 +41,19 @@ public class TwitchChatReader implements Runnable {
         PrintWriter writer = new PrintWriter(
                 new OutputStreamWriter(socket.getOutputStream()), true);
 
-        writer.println("PASS oauth:twitch_anonymous");
-        writer.println("NICK justinfan" + (int)(Math.random() * 90000 + 10000));
-        writer.println("CAP REQ :twitch.tv/tags");
+        if (oauthToken != null && twitchLogin != null) {
+            writer.println("PASS oauth:" + oauthToken);
+            writer.println("NICK " + twitchLogin);
+        } else {
+            writer.println("PASS oauth:twitch_anonymous");
+            writer.println("NICK justinfan" + (int)(Math.random() * 90000 + 10000));
+        }
+        writer.println("CAP REQ :twitch.tv/tags twitch.tv/commands");
         writer.println("JOIN #" + channel);
 
         String line;
         while ((line = reader.readLine()) != null) {
+            System.err.println("[Twitch Mod] Testing: "+line);
             if (line.startsWith("PING")) {
                 writer.println("PONG :tmi.twitch.tv");
                 continue;

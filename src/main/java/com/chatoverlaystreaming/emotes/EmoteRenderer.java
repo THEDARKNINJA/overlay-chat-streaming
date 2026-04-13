@@ -37,8 +37,6 @@ public class EmoteRenderer {
     private final JTextPane textPane;
     private static final Pattern URL_PATTERN = Pattern.compile("(https?://\\S+)", Pattern.CASE_INSENSITIVE);
 
-    private boolean clickHandlerInstalled = false;
-
 
     public EmoteRenderer(int iconSize, JTextPane textPane, ImageCache sharedImageCache) {
         this.textPane = textPane;
@@ -107,10 +105,11 @@ public class EmoteRenderer {
                         StyleConstants.setBold(eventStyle, true);
                         if (text == null || text.isBlank()) {
                             doc.insertString(doc.getLength(),
-                                    "★ RECOMPENSA — " + eventExtra + " — " + username + "\n", eventStyle);
+                                    //"★ RECOMPENSA — " + eventExtra + " — " + username + "\n", eventStyle);
+                                    "★ " + username + " CANJEÓ: — " + eventExtra + "\n", eventStyle);
                             return;
                         }
-                        doc.insertString(doc.getLength(), "★ RECOMPENSA — " + eventExtra + "\n", eventStyle);
+                        doc.insertString(doc.getLength(), "★ RECOMPENSA CANJEADA: — " + eventExtra + "\n", eventStyle);
                         renderMessageBody(doc, platform, username, tokens,
                                         badgeUrls, userColor, baseStyle);
                         doc.insertString(doc.getLength(), "\n", baseStyle);
