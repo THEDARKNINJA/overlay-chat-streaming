@@ -45,14 +45,28 @@ public class Main {
             twitchLogin = null;
         }
 
-        if (accessToken != null) {
-            Thread eventSubThread = new Thread(
-                    new TwitchEventSub(accessToken, config.getTwitchClientId(),
-                                    config.getTwitchChannelId(), queue),
-                    "twitch-eventsub");
+        // EventSub para leer y manejar las recompensas
+        TwitchEventSub eventSub = accessToken != null
+                ? new TwitchEventSub(accessToken, config.getTwitchClientId(),
+                                    config.getTwitchChannelId(), queue)
+                : null;
+
+        if (eventSub != null) {
+            Thread eventSubThread = new Thread(eventSub, "twitch-eventsub");
             eventSubThread.setDaemon(true);
             eventSubThread.start();
         }
+
+        // Lanzar interfaz
+        SwingUtilities.invokeLater(() -> {
+            ChatOverlay overlay = new ChatOverlay(
+                    queue, config.getTwitchChannelId(),
+                    config.getTwitchClientId(), config.getTwitchClientSecret(),
+                    config, sharedImageCache);
+            if (eventSub != null) overlay.setEventSub(eventSub);
+            overlay.setVisible(true);
+            overlay.initNativeFeatures();
+        });
 
         // Iniciar lectores
         Thread twitchThread = new Thread(
@@ -69,18 +83,5 @@ public class Main {
                 "youtube-reader");
         youtubeThread.setDaemon(true);
         youtubeThread.start();
-
-        // Lanzar interfaz
-        SwingUtilities.invokeLater(() -> {
-            ChatOverlay overlay = new ChatOverlay(
-                    queue,
-                    config.getTwitchChannelId(),
-                    config.getTwitchClientId(),
-                    config.getTwitchClientSecret(),
-                    config, sharedImageCache
-                );
-                overlay.setVisible(true);
-                overlay.initNativeFeatures();
-        });
     }
 }

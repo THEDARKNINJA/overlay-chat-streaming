@@ -1,6 +1,8 @@
 package com.chatoverlaystreaming.emotes;
 
 import com.chatoverlaystreaming.model.EmoteToken;
+import com.chatoverlaystreaming.readers.TwitchEventSub;
+
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.text.*;
@@ -36,6 +38,8 @@ public class EmoteRenderer {
     private final int iconSize;
     private final JTextPane textPane;
     private static final Pattern URL_PATTERN = Pattern.compile("(https?://\\S+)", Pattern.CASE_INSENSITIVE);
+
+    private TwitchEventSub eventSub = null;
 
 
     public EmoteRenderer(int iconSize, JTextPane textPane, ImageCache sharedImageCache) {
@@ -83,37 +87,45 @@ public class EmoteRenderer {
         if (eventType != null) {
             switch (eventType) {
                 case "reward" -> {
-                    if ("Mensaje destacado".equals(eventExtra)) {
-                        // Estilo subrayado dorado
+                    // eventExtra tiene formato "titulo|rewardId|redemptionId"
+                    // o solo "titulo" si viene del IRC (mensajes destacados, recompensas sin EventSub)
+                    String[] parts = eventExtra != null ? eventExtra.split("\\|", 3) : new String[0];
+                    String rewardTitle  = parts.length > 0 ? parts[0] : "";
+                    String rewardId     = parts.length > 1 ? parts[1] : null;
+                    String redemptionId = parts.length > 2 ? parts[2] : null;
+
+                    if ("Mensaje destacado".equals(rewardTitle)) {
                         SimpleAttributeSet highlightStyle = new SimpleAttributeSet(baseStyle);
                         StyleConstants.setUnderline(highlightStyle, true);
-
                         renderMessageBody(doc, platform, username, tokens,
-                                        badgeUrls, userColor, highlightStyle);
-
-                        // Tag al final
+                                badgeUrls, userColor, highlightStyle);
                         SimpleAttributeSet tagStyle = new SimpleAttributeSet(baseStyle);
                         StyleConstants.setForeground(tagStyle, REWARD_COLOR);
                         StyleConstants.setBold(tagStyle, true);
                         doc.insertString(doc.getLength(), " — ★ Mensaje destacado\n", tagStyle);
-                        
-                    } else {
 
-                        // Recompensa normal sin mensaje
+                    } else {
                         SimpleAttributeSet eventStyle = new SimpleAttributeSet(baseStyle);
                         StyleConstants.setForeground(eventStyle, REWARD_COLOR);
                         StyleConstants.setBold(eventStyle, true);
+
                         if (text == null || text.isBlank()) {
                             doc.insertString(doc.getLength(),
-                                    //"★ RECOMPENSA — " + eventExtra + " — " + username + "\n", eventStyle);
-                                    "★ " + username + " CANJEÓ: — " + eventExtra + "\n", eventStyle);
-                            return;
+                                    //"★ RECOMPENSA — " + rewardTitle + " — " + username, eventStyle);
+                                    "★ " + username + " CANJEÓ: — " + rewardTitle + "\n", eventStyle);
+                        } else {
+                            doc.insertString(doc.getLength(),
+                                    "★ RECOMPENSA CANJEADA: — " + rewardTitle + "\n", eventStyle);
+                            renderMessageBody(doc, platform, username, tokens,
+                                    badgeUrls, userColor, baseStyle);
                         }
-                        doc.insertString(doc.getLength(), "★ RECOMPENSA CANJEADA: — " + eventExtra + "\n", eventStyle);
-                        renderMessageBody(doc, platform, username, tokens,
-                                        badgeUrls, userColor, baseStyle);
-                        doc.insertString(doc.getLength(), "\n", baseStyle);
 
+                        // Botones solo si tenemos los IDs y es una recompensa de la app (viene de EventSub)
+                        if (rewardId != null && redemptionId != null && eventSub != null && eventSub.isRewardOwnedByApp(rewardId)) {
+                            insertRewardButtons(doc, rewardId, redemptionId, eventSub);
+                        }
+
+                        doc.insertString(doc.getLength(), "\n", baseStyle);
                     }
                     return;
                 }
@@ -304,6 +316,57 @@ public class EmoteRenderer {
         linkStyle.addAttribute("link", fullUrl);
 
         doc.insertString(doc.getLength(), visible, linkStyle);
+    }
+
+    private void insertRewardButtons(StyledDocument doc,
+                                  String rewardId,
+                                  String redemptionId,
+                                  TwitchEventSub eventSub)
+        throws BadLocationException {
+
+        JButton[] buttons = new JButton[2];
+
+        // Botón OK
+        buttons[0] = new JButton("✔");
+        buttons[0].setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
+        buttons[0].setForeground(new Color(50, 220, 120));
+        buttons[0].setBackground(new Color(30, 30, 35));
+        buttons[0].setBorder(BorderFactory.createLineBorder(new Color(50, 220, 120), 1));
+        buttons[0].setFocusPainted(false);
+        buttons[0].setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        buttons[0].setMargin(new Insets(1, 4, 1, 4));
+
+        // Botón DEVOLVER
+        buttons[1] = new JButton("✖");
+        buttons[1].setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
+        buttons[1].setForeground(new Color(255, 80, 80));
+        buttons[1].setBackground(new Color(30, 30, 35));
+        buttons[1].setBorder(BorderFactory.createLineBorder(new Color(255, 80, 80), 1));
+        buttons[1].setFocusPainted(false);
+        buttons[1].setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        buttons[1].setMargin(new Insets(1, 4, 1, 4));
+
+        buttons[0].addActionListener(e -> {
+            eventSub.updateRedemption(rewardId, redemptionId, true);
+            buttons[0].setEnabled(false);
+            buttons[1].setEnabled(false);
+        });
+
+        buttons[1].addActionListener(e -> {
+            eventSub.updateRedemption(rewardId, redemptionId, false);
+            buttons[0].setEnabled(false);
+            buttons[1].setEnabled(false);
+        });
+
+        for (JButton btn : buttons) {
+            Style style = doc.addStyle(btn.getText() + "-" + redemptionId + System.nanoTime(), null);
+            StyleConstants.setComponent(style, btn);
+            doc.insertString(doc.getLength(), " ", style);
+        }
+    }
+
+    public void setEventSub(TwitchEventSub eventSub) {
+        this.eventSub = eventSub;
     }
 
 }

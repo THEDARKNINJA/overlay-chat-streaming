@@ -3,6 +3,7 @@ package com.chatoverlaystreaming.overlay;
 import com.chatoverlaystreaming.emotes.*;
 import com.chatoverlaystreaming.model.ChatMessage;
 import com.chatoverlaystreaming.model.EmoteToken;
+import com.chatoverlaystreaming.readers.TwitchEventSub;
 import com.chatoverlaystreaming.service.ViewerCountService;
 
 import javax.swing.*;
@@ -816,5 +817,8 @@ System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
             System.err.println("[Overlay] No se pudo cargar icono: " + path);
             return null;
         }
+    }
+    public void setEventSub(TwitchEventSub eventSub) {
+        emoteRenderer.setEventSub(eventSub);
     }
 }

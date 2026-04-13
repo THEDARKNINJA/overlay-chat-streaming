@@ -53,7 +53,7 @@ public class TwitchChatReader implements Runnable {
 
         String line;
         while ((line = reader.readLine()) != null) {
-            System.err.println("[Twitch Mod] Testing: "+line);
+            
             if (line.startsWith("PING")) {
                 writer.println("PONG :tmi.twitch.tv");
                 continue;
