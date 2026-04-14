@@ -33,11 +33,13 @@ public class RewardsPanel extends JDialog {
     private JSpinner    costSpinner;
     private JCheckBox   userInputCheck;
     private JCheckBox   skipQueueCheck;
+    private JCheckBox   enabledCheck;
     private JTextField  colorField;
     private JCheckBox   cooldownCheck;
     private JSpinner    cooldownSpinner;
     private JComboBox<String> typeCombo;
     private JTextField  folderField;
+    
 
     // Botones
     private JButton saveBtn;
@@ -163,6 +165,10 @@ public class RewardsPanel extends JDialog {
         skipQueueCheck = styledCheckBox("Completar automáticamente");
         addFormRow(form, gbc, row++, "", skipQueueCheck);
 
+        enabledCheck = styledCheckBox("Recompensa activa");
+        enabledCheck.setSelected(true); // por defecto activa
+        addFormRow(form, gbc, row++, "", enabledCheck);
+
         // Cooldown
         JPanel cooldownPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         cooldownPanel.setBackground(BG);
@@ -266,6 +272,7 @@ public class RewardsPanel extends JDialog {
         userInputCheck.setSelected(reward.optBoolean("is_user_input_required", false));
         skipQueueCheck.setSelected(
                 reward.optBoolean("should_redemptions_skip_request_queue", false));
+        enabledCheck.setSelected(reward.optBoolean("is_enabled", true));
 
         boolean hasCooldown = reward.optBoolean("is_global_cooldown_enabled", false);
         cooldownCheck.setSelected(hasCooldown);
@@ -287,6 +294,7 @@ public class RewardsPanel extends JDialog {
         costSpinner.setValue(100);
         colorField.setText("#9147FF");
         userInputCheck.setSelected(false);
+        enabledCheck.setSelected(true);
         skipQueueCheck.setSelected(false);
         cooldownCheck.setSelected(false);
         cooldownSpinner.setEnabled(false);
@@ -301,6 +309,7 @@ public class RewardsPanel extends JDialog {
         int cost      = (int) costSpinner.getValue();
         String color  = colorField.getText().trim();
         boolean userInput  = userInputCheck.isSelected();
+        boolean enabled = enabledCheck.isSelected();
         boolean skipQueue  = skipQueueCheck.isSelected();
         boolean hasCooldown = cooldownCheck.isSelected();
         int cooldownSecs   = (int) cooldownSpinner.getValue();
@@ -333,11 +342,11 @@ public class RewardsPanel extends JDialog {
 
                 if (isNew) {
                     return eventSub.createReward(title, prompt, cost,
-                            userInput, skipQueue, color, hasCooldown, cooldownSecs);
+                            userInput, skipQueue, color, hasCooldown, cooldownSecs, enabled);
                 } else {
                     String rewardId = rewardsList.get(idx - 1).getString("id");
                     return eventSub.updateReward(rewardId, title, prompt, cost,
-                            userInput, skipQueue, color, hasCooldown, cooldownSecs);
+                            userInput, skipQueue, color, hasCooldown, cooldownSecs, enabled);
                 }
             }
 

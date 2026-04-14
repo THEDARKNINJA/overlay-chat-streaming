@@ -8,17 +8,28 @@ import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.scene.media.MediaView;
 
+import java.lang.reflect.Method;
+
+
 import javax.sound.sampled.*;
 import javax.swing.*;
 import java.io.File;
+import java.lang.annotation.Native;
 import java.nio.file.*;
 import java.util.*;
 
 public class RewardMediaPlayer {
 
-    // Inicializar JavaFX una sola vez
-    static {
-        new JFXPanel();
+    // Inicializar JavaFX, necesario todo esto y usar el ensureFX antes de play() porque si no, no carga los vídeos 2 o más
+    private static boolean fxInitialized = false;
+    private static void ensureFX() {
+        if (!fxInitialized) {
+            fxInitialized = true;
+            SwingUtilities.invokeLater(() -> {
+                new JFXPanel(); // inicializa JavaFX
+                Platform.setImplicitExit(false); 
+            });
+        }
     }
 
     /**
@@ -87,10 +98,12 @@ public class RewardMediaPlayer {
     }
 
     private static void playVideo(Path file) {
+        ensureFX();
         SwingUtilities.invokeLater(() -> {
             VideoOverlay overlay = new VideoOverlay(file);
             overlay.setVisible(true);
             overlay.play();
         });
+
     }
 }

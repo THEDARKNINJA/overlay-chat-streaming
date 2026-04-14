@@ -340,13 +340,15 @@ public class TwitchEventSub implements Runnable {
                                 boolean skipQueue,
                                 String backgroundColor,
                                 boolean globalCooldownEnabled,
-                                int globalCooldownSeconds) throws Exception {
+                                int globalCooldownSeconds,
+                                boolean enabled) throws Exception {
         JSONObject body = new JSONObject();
         body.put("title", title);
         body.put("prompt", prompt);
         body.put("cost", cost);
         body.put("is_user_input_required", userInputRequired);
         body.put("should_redemptions_skip_request_queue", skipQueue);
+        body.put("is_enabled", enabled);
         if (backgroundColor != null && !backgroundColor.isBlank()) {
             body.put("background_color", backgroundColor);
         }
@@ -370,13 +372,15 @@ public class TwitchEventSub implements Runnable {
                                     int cost, boolean userInputRequired,
                                     boolean skipQueue, String backgroundColor,
                                     boolean globalCooldownEnabled,
-                                    int globalCooldownSeconds) throws Exception {
+                                    int globalCooldownSeconds,
+                                    boolean enabled) throws Exception {
         JSONObject body = new JSONObject();
         body.put("title", title);
         body.put("prompt", prompt);
         body.put("cost", cost);
         body.put("is_user_input_required", userInputRequired);
         body.put("should_redemptions_skip_request_queue", skipQueue);
+        body.put("is_enabled", enabled);
         if (backgroundColor != null && !backgroundColor.isBlank()) {
             body.put("background_color", backgroundColor);
         }

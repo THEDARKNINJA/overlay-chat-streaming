@@ -77,7 +77,7 @@
         <configuration>
             <mainClass>com.chatoverlaystreaming.Main</mainClass>
         </configuration>
-    </plugin>
+      </plugin>
     </plugins>
   </build>
 </project>

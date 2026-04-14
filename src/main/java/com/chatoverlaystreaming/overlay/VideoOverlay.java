@@ -53,6 +53,7 @@ public class VideoOverlay extends JFrame {
                 pane.setStyle("-fx-background-color: black;");
 
                 Scene scene = new Scene(pane, WIDTH, HEIGHT, Color.BLACK);
+                //Scene scene = new Scene(pane, WIDTH, HEIGHT, Color.TRANSPARENT);
                 fxPanel.setScene(scene);
 
                 player.setOnEndOfMedia(() -> {

@@ -37,6 +37,7 @@ public class ChatOverlay extends JFrame {
     private WindowClickThrough clickThrough;
     private TrayIcon trayIcon;
     private JMenuItem toggleItem;
+    private JButton rewardsButton;
     private JPanel dragBar;
     private Rectangle closeButtonRect = new Rectangle();
     private Rectangle resizeHandleRect = new Rectangle();
@@ -63,6 +64,7 @@ public class ChatOverlay extends JFrame {
         this.config = config;
         canClickLink = config.getCanClickLink();
         textPane = new JTextPane();
+        rewardsButton = buildRewardsButton();
 
         twitchIcon  = loadIcon("/icons/twitch.png", 14);
         youtubeIcon = loadIcon("/icons/youtube.png", 14);
@@ -274,7 +276,7 @@ public class ChatOverlay extends JFrame {
 
         JPanel rewardsWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         rewardsWrapper.setBackground(new Color(14, 14, 16));
-        rewardsWrapper.add(buildRewardsButton());
+        rewardsWrapper.add(rewardsButton);
         //panel.add(rewardsWrapper, BorderLayout.SOUTH);
 
         // Añade panel inferior para agregar espectadores y botón recompensas y que ambos se vean
@@ -536,6 +538,19 @@ public class ChatOverlay extends JFrame {
             );
             viewerService.start();
         }
+
+        // Visibilidad botón recompensas con/sin focus
+        addWindowFocusListener(new java.awt.event.WindowFocusListener() {
+            @Override
+            public void windowGainedFocus(java.awt.event.WindowEvent e) {
+                rewardsButton.setVisible(true);
+            }
+
+            @Override
+            public void windowLostFocus(java.awt.event.WindowEvent e) {
+                rewardsButton.setVisible(false);
+            }
+        });
     }
 
     /* 
@@ -871,11 +886,17 @@ System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
         } catch (Exception e) {
             btn.setText("★");
         }
+        btn.setForeground(new Color(255, 200, 50));  // amarillo
         btn.setBackground(new Color(24, 24, 28));
-        btn.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        // btn.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        Dimension d = btn.getPreferredSize();
+        btn.setPreferredSize(new Dimension(d.width + 2, d.height));
+        btn.setBorder(BorderFactory.createLineBorder(
+            new Color(255, 200, 50), 1));
         btn.setFocusPainted(false);
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setToolTipText("Gestionar recompensas");
+        btn.setVisible(false); // oculto por defecto
         btn.addActionListener(e -> {
             if (eventSub == null) {
                 JOptionPane.showMessageDialog(this,
