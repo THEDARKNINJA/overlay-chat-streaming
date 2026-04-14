@@ -7,9 +7,9 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.WebSocket;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -23,7 +23,7 @@ public class TwitchEventSub implements Runnable {
     private static final String WS_URL          = "wss://eventsub.wss.twitch.tv/ws";
     private static final String SUBSCRIBE_URL   = "https://api.twitch.tv/helix/eventsub/subscriptions";
     private static final String REDEMPTIONS_URL = "https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions";
-    private static final String APP_REWARDS_URL = "https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id=";
+    private static final String APP_REWARDS_URL = "https://api.twitch.tv/helix/channel_points/custom_rewards";
 
     private final String accessToken;
     private final String clientId;
@@ -40,7 +40,7 @@ public class TwitchEventSub implements Runnable {
         this.clientId     = clientId;
         this.broadcasterId = broadcasterId;
         this.queue        = queue;
-        retrieveListRewards();
+        //retrieveListRewards();
     }
 
     @Override
@@ -268,11 +268,12 @@ public class TwitchEventSub implements Runnable {
         running = false;
     }
 
-    
+    /*
     private void retrieveListRewards() {
         try{
+            String url = APP_REWARDS_URL + "?broadcaster_id=" + broadcasterId + "&only_manageable_rewards=true";
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(APP_REWARDS_URL))
+                    .uri(URI.create(url))
                     .header("Authorization", "Bearer " + accessToken)
                     .header("Client-Id", clientId)
                     .build();
@@ -297,6 +298,29 @@ public class TwitchEventSub implements Runnable {
             System.err.println("[EventSub] Exception: "+ e.getMessage());
         }
     }
+    */
+    private void retrieveListRewards() {
+        try {
+            String url = APP_REWARDS_URL + "?broadcaster_id=" + broadcasterId + "&only_manageable_rewards=true";
+
+            HttpResponse<String> response = httpGet(url);
+
+            if (response.statusCode() != 200) {
+                throw new Exception("Error obteniendo recompensas: "
+                        + response.statusCode() + " " + response.body());
+            }
+
+            appRewards.clear(); // limpiamos la lista antes de actualizar
+            JSONObject json = new JSONObject(response.body());
+            org.json.JSONArray data = json.getJSONArray("data");
+            for (int i = 0; i < data.length(); i++) {
+                appRewards.add(data.getJSONObject(i));
+            }
+            
+        } catch (Exception e) {
+            System.err.println("[EventSub] Error recuperando lista de recompensas: " +e.getMessage() );
+        }
+    }
 
     public boolean isRewardOwnedByApp(JSONObject reward) {
         return isRewardOwnedByApp(reward.optString("id", ""));
@@ -309,5 +333,140 @@ public class TwitchEventSub implements Runnable {
                 return true;
         }
         return false;
+    }
+
+    public JSONObject createReward(String title, String prompt, int cost,
+                                boolean userInputRequired,
+                                boolean skipQueue,
+                                String backgroundColor,
+                                boolean globalCooldownEnabled,
+                                int globalCooldownSeconds) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("title", title);
+        body.put("prompt", prompt);
+        body.put("cost", cost);
+        body.put("is_user_input_required", userInputRequired);
+        body.put("should_redemptions_skip_request_queue", skipQueue);
+        if (backgroundColor != null && !backgroundColor.isBlank()) {
+            body.put("background_color", backgroundColor);
+        }
+        body.put("is_global_cooldown_enabled", globalCooldownEnabled);
+        if (globalCooldownEnabled) {
+            body.put("global_cooldown_seconds", globalCooldownSeconds);
+        }
+
+        HttpResponse<String> response = httpPost(APP_REWARDS_URL +
+                "?broadcaster_id=" + broadcasterId, body.toString());
+
+        if (response.statusCode() != 200) {
+            throw new Exception("Error creando recompensa: "
+                    + response.statusCode() + " " + response.body());
+        }
+
+        return new JSONObject(response.body()).getJSONArray("data").getJSONObject(0);
+    }
+
+    public JSONObject updateReward(String rewardId, String title, String prompt,
+                                    int cost, boolean userInputRequired,
+                                    boolean skipQueue, String backgroundColor,
+                                    boolean globalCooldownEnabled,
+                                    int globalCooldownSeconds) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("title", title);
+        body.put("prompt", prompt);
+        body.put("cost", cost);
+        body.put("is_user_input_required", userInputRequired);
+        body.put("should_redemptions_skip_request_queue", skipQueue);
+        if (backgroundColor != null && !backgroundColor.isBlank()) {
+            body.put("background_color", backgroundColor);
+        }
+        body.put("is_global_cooldown_enabled", globalCooldownEnabled);
+        if (globalCooldownEnabled) {
+            body.put("global_cooldown_seconds", globalCooldownSeconds);
+        }
+
+        String url = APP_REWARDS_URL + "?broadcaster_id=" + broadcasterId
+                + "&id=" + rewardId;
+
+        HttpResponse<String> response = httpPatch(url, body.toString());
+
+        if (response.statusCode() != 200) {
+            throw new Exception("Error actualizando recompensa: "
+                    + response.statusCode() + " " + response.body());
+        }
+
+        return new JSONObject(response.body()).getJSONArray("data").getJSONObject(0);
+    }
+
+    public void deleteReward(String rewardId) throws Exception {
+        String url = APP_REWARDS_URL + "?broadcaster_id=" + broadcasterId
+                + "&id=" + rewardId;
+
+        HttpResponse<String> response = httpDelete(url);
+
+        if (response.statusCode() != 204) {
+            throw new Exception("Error borrando recompensa: "
+                    + response.statusCode() + " " + response.body());
+        }
+    }
+
+    public List<JSONObject> getListRewards () {
+        return appRewards;
+    }
+
+    // ── Utilidades HTTP ──────────────────────────────────────────────────────────
+
+    private HttpResponse<String> httpGet(String url) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Client-Id", clientId)
+                .GET()
+                .build();
+        return HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> httpPost(String url, String body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Client-Id", clientId)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        body, StandardCharsets.UTF_8))
+                .build();
+        return HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> httpPatch(String url, String body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Client-Id", clientId)
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(
+                        body, StandardCharsets.UTF_8))
+                .build();
+        return HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> httpDelete(String url) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Client-Id", clientId)
+                .DELETE()
+                .build();
+        return HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    public List<JSONObject> refreshRewards() throws Exception {
+        retrieveListRewards();
+        // Devolver una copia para evitar que la UI toque la lista estática
+        return new ArrayList<>(appRewards);
     }
 }

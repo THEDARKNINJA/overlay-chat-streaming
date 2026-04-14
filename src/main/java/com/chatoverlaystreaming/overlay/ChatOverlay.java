@@ -52,6 +52,7 @@ public class ChatOverlay extends JFrame {
 
     private final Config config;
     private javax.swing.Timer saveTimer;
+    private TwitchEventSub eventSub;
 
     public ChatOverlay(BlockingQueue<ChatMessage> queue,
                        String twitchChannelId,
@@ -135,6 +136,7 @@ public class ChatOverlay extends JFrame {
         //panel.setOpaque(false);
         panel.setOpaque(true);
 
+
         // Barra de arrastre en la parte superior
         dragBar = new JPanel() {
             @Override
@@ -212,7 +214,7 @@ public class ChatOverlay extends JFrame {
         };
         resizeHandle.setOpaque(false);
         resizeHandle.setPreferredSize(new Dimension(16, 16));
-
+        
         viewerPanel = new JPanel() {
             @Override
             protected void paintComponent(Graphics g) {
@@ -268,8 +270,21 @@ public class ChatOverlay extends JFrame {
             }
         };
         viewerPanel.setOpaque(false);
-        viewerPanel.setPreferredSize(new Dimension(0, 20));
-        panel.add(viewerPanel, BorderLayout.SOUTH);
+        viewerPanel.setPreferredSize(new Dimension(80, 20));
+
+        JPanel rewardsWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        rewardsWrapper.setBackground(new Color(14, 14, 16));
+        rewardsWrapper.add(buildRewardsButton());
+        //panel.add(rewardsWrapper, BorderLayout.SOUTH);
+
+        // Añade panel inferior para agregar espectadores y botón recompensas y que ambos se vean
+        JPanel bottomBar = new JPanel(new BorderLayout());
+        bottomBar.setOpaque(false);
+        bottomBar.add(viewerPanel, BorderLayout.WEST);
+        bottomBar.add(rewardsWrapper, BorderLayout.CENTER);
+
+        panel.add(bottomBar, BorderLayout.SOUTH);
+        //panel.add(viewerPanel, BorderLayout.SOUTH);
 
         // Área de texto
         textPane.setEditable(false);
@@ -686,6 +701,19 @@ public class ChatOverlay extends JFrame {
                 return;
             }
 
+            // eventos recompensa de activación (Bobobo like)
+            if ("reward".equals(msg.eventType()) && msg.eventExtra() != null) {
+                String[] parts = msg.eventExtra().split("\\|", 3);
+                String rewardId = parts.length > 1 ? parts[1] : null;
+                if (rewardId != null) {
+                    String type   = config.getRewardType(rewardId);
+                    String folder = config.getRewardFolder(rewardId);
+                    if (type != null && folder != null) {
+                        RewardMediaPlayer.play(type, folder);
+                    }
+                }
+            }
+
             // Limpiar mensajes viejos
             if (doc.getDefaultRootElement().getElementCount() > MAX_MESSAGES) {
                 Element root  = doc.getDefaultRootElement();
@@ -819,6 +847,45 @@ System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
         }
     }
     public void setEventSub(TwitchEventSub eventSub) {
+        this.eventSub = eventSub;
         emoteRenderer.setEventSub(eventSub);
+    }
+    
+    // En buildUI() o donde construyes los controles, añadir el botón:
+    private JButton buildRewardsButton() {
+        JButton btn = new JButton();
+        try {
+            /*
+            // Para poner un icono personalizado, pero javax.imageio.ImageIO da problemas
+            var url = getClass().getResource("/icons/rewards.png");
+            if (url != null) {
+                ImageIcon icon = new ImageIcon(
+                        new javax.imageio.ImageIO.read(url)
+                                .getScaledInstance(18, 18, Image.SCALE_SMOOTH));
+                btn.setIcon(icon);
+            } else {
+                btn.setText("★");
+            }
+                 */
+            btn.setText("★");
+        } catch (Exception e) {
+            btn.setText("★");
+        }
+        btn.setBackground(new Color(24, 24, 28));
+        btn.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setToolTipText("Gestionar recompensas");
+        btn.addActionListener(e -> {
+            if (eventSub == null) {
+                JOptionPane.showMessageDialog(this,
+                        "El EventSub no está disponible.\n" +
+                        "Comprueba que el OAuth está configurado.",
+                        "Sin conexión", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            new RewardsPanel(this, eventSub, config).setVisible(true);
+        });
+        return btn;
     }
 }

@@ -20,6 +20,7 @@ public class Config {
 
     private final JSONObject root;
     private final JSONObject twitch;
+    private final JSONObject twitchRewards;
     private final JSONObject youtube;
     private final JSONObject panel;
     private final JSONObject misc;
@@ -38,7 +39,11 @@ public class Config {
         youtube = root.getJSONObject("youtube");
         panel = root.getJSONObject("panel");
         misc = root.getJSONObject("misc");
-
+        if (!root.has("twitchRewards")) {
+            root.put("twitchRewards", new JSONObject());
+        }
+        twitchRewards = root.getJSONObject("twitchRewards");
+        
     }
 
     public String getTwitchChannel()   { return twitch.optString("channel", "");   }
@@ -48,6 +53,16 @@ public class Config {
     public long getTwitchSpectatorUpdate() { return twitch.optLong("timeSpectatorUpdate", 60); }
     public String getTwitchAccessToken() { return twitch.optString("accessToken", null); }
     public String getTwitchRefreshToken() { return twitch.optString("refreshToken", null); }
+    public String getRewardType(String rewardId) {
+        if (!twitchRewards.has(rewardId)) return null;
+        return twitchRewards.getJSONObject(rewardId).optString("type", null);
+    }
+    public String getRewardFolder(String rewardId) {
+        if (!twitchRewards.has(rewardId)) return null;
+        return twitchRewards.getJSONObject(rewardId).optString("folder", null);
+    }
+
+
     public String getYoutubeChannelId()  { return youtube.optString("channelId", "");  }
     public String getYoutubeVideoId()  { return youtube.optString("videoId", "");  }
     public String getYoutubeApiKey()   { return getYoutubeApiKeys().get(0);   }
@@ -117,6 +132,19 @@ public class Config {
     public void saveTwitchTokens(String accessToken, String refreshToken) throws IOException {
         twitch.put("accessToken", accessToken);
         twitch.put("refreshToken", refreshToken);
+        Files.writeString(Paths.get("config.json"), root.toString(2));
+    }
+
+    public void saveTwitchReward(String rewardId, String type, String folder) throws IOException {
+        JSONObject entry = new JSONObject();
+        entry.put("type", type);
+        entry.put("folder", folder);
+        twitchRewards.put(rewardId, entry);
+        Files.writeString(Paths.get("config.json"), root.toString(2));
+    }
+
+    public void deleteTwitchReward(String rewardId) throws IOException {
+        twitchRewards.remove(rewardId);
         Files.writeString(Paths.get("config.json"), root.toString(2));
     }
 

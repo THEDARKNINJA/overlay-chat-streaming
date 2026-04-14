@@ -121,9 +121,11 @@ public class EmoteRenderer {
                         }
 
                         // Botones solo si tenemos los IDs y es una recompensa de la app (viene de EventSub)
+                        /*
                         if (rewardId != null && redemptionId != null && eventSub != null && eventSub.isRewardOwnedByApp(rewardId)) {
                             insertRewardButtons(doc, rewardId, redemptionId, eventSub);
                         }
+                             */
 
                         doc.insertString(doc.getLength(), "\n", baseStyle);
                     }

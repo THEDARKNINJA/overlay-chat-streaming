@@ -11,7 +11,10 @@ E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\model\ChatMessa
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\model\EmoteToken.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\ChatOverlay.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\Config.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\RewardMediaPlayer.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\RewardsPanel.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\TwitchAuth.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\VideoOverlay.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\WindowClickThrough.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\WrapEditorKitPro.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\readers\TwitchChatReader.java
