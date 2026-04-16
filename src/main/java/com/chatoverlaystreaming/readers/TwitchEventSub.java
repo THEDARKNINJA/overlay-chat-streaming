@@ -384,8 +384,9 @@ public class TwitchEventSub implements Runnable {
         if (backgroundColor != null && !backgroundColor.isBlank()) {
             body.put("background_color", backgroundColor);
         }
-        body.put("is_global_cooldown_enabled", globalCooldownEnabled);
+        
         if (globalCooldownEnabled) {
+            body.put("is_global_cooldown_enabled", globalCooldownEnabled);
             body.put("global_cooldown_seconds", globalCooldownSeconds);
         }
 

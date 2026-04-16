@@ -18,9 +18,9 @@ public class Logger {
             Path logsDir = Paths.get("logs");
             if (!Files.exists(logsDir)) Files.createDirectory(logsDir);
 
-            String filename = "logs/overlay-" +
-                LocalDateTime.now().format(
-                    DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")) + ".log";
+            String logDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            String logTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH-mm-ss"));
+            String filename = "logs/overlay-" + logDate + ".log";
 
             // Guardar referencias originales antes de redirigir
             originalOut = System.out;
@@ -44,7 +44,7 @@ public class Logger {
                 }
             });
 
-            System.out.println("Log iniciado: " + filename);
+            System.out.println("Log iniciado: " + "overlay-"+logDate+"_"+logTime);
 
         } catch (IOException e) {
             System.err.println("No se pudo inicializar el log: " + e.getMessage());

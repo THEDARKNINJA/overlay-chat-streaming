@@ -1,0 +1,7 @@
+{
+    "type": "java",
+    "name": "Main",
+    "request": "launch",
+    "mainClass": "com.chatoverlaystreaming.Main",
+    "vmArgs": "-Dsun.java2d.noddraw=true -Dsun.java2d.d3d=false -Dsun.java2d.opengl=false -Dsun.java2d.gdi=true -Dprism.order=sw -Dprism.verbose=true --add-modules javafx.media,javafx.swing"
+}

@@ -8,6 +8,9 @@ import com.chatoverlaystreaming.service.ViewerCountService;
 
 import javax.swing.*;
 import javax.swing.text.*;
+
+import org.json.JSONObject;
+
 import javax.swing.event.PopupMenuListener;
 import javax.swing.event.PopupMenuEvent;
 import java.awt.*;
@@ -34,9 +37,9 @@ public class ChatOverlay extends JFrame {
     private final Map<String, int[]> messageOffsets = new LinkedHashMap<>();
     // usuario -> lista de messageIds
     private final Map<String, List<String>> userMessages = new LinkedHashMap<>();
+    private final java.util.Deque<long[]> messageTimestamps = new java.util.ArrayDeque<>();
     private WindowClickThrough clickThrough;
-    private TrayIcon trayIcon;
-    private JMenuItem toggleItem;
+    // private TrayIcon trayIcon;
     private JButton rewardsButton;
     private JPanel dragBar;
     private Rectangle closeButtonRect = new Rectangle();
@@ -50,6 +53,8 @@ public class ChatOverlay extends JFrame {
     private JPanel viewerPanel;
     private ImageIcon twitchIcon;
     private ImageIcon youtubeIcon;
+    private JButton obsVisibilityBtn;
+    private boolean visibleToObs = false; // empieza oculto por defecto
 
     private final Config config;
     private javax.swing.Timer saveTimer;
@@ -65,6 +70,7 @@ public class ChatOverlay extends JFrame {
         canClickLink = config.getCanClickLink();
         textPane = new JTextPane();
         rewardsButton = buildRewardsButton();
+        obsVisibilityBtn = buildObsVisibilityButton();
 
         twitchIcon  = loadIcon("/icons/twitch.png", 14);
         youtubeIcon = loadIcon("/icons/youtube.png", 14);
@@ -277,6 +283,7 @@ public class ChatOverlay extends JFrame {
         JPanel rewardsWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         rewardsWrapper.setBackground(new Color(14, 14, 16));
         rewardsWrapper.add(rewardsButton);
+        rewardsWrapper.add(obsVisibilityBtn);
         //panel.add(rewardsWrapper, BorderLayout.SOUTH);
 
         // Añade panel inferior para agregar espectadores y botón recompensas y que ambos se vean
@@ -479,7 +486,9 @@ public class ChatOverlay extends JFrame {
         resizeHandle.addMouseMotionListener(resizeAdapter);
 
         //Inicializar BTTV Emotes y Twitch Badges
-        bttvEmoteCache = new BTTVEmoteCache(twitchChannelId);
+        bttvEmoteCache = config.getLoadBTTV()
+                        ? new BTTVEmoteCache(twitchChannelId)
+                        : null;
         badgeCache     = new TwitchBadgeCache(twitchClientId,
                                               twitchClientSecret,
                                               twitchChannelId);
@@ -511,6 +520,8 @@ public class ChatOverlay extends JFrame {
             } catch (InterruptedException ignored) {}
 
             try {
+                visibleToObs = false;
+                applyObsVisibility();
                 clickThrough = new WindowClickThrough(this);
                 clickThrough.setClickThrough(isLocked);
                 clickThrough.setExcludeFromCapture(true, config.getPanelAlpha());
@@ -544,11 +555,13 @@ public class ChatOverlay extends JFrame {
             @Override
             public void windowGainedFocus(java.awt.event.WindowEvent e) {
                 rewardsButton.setVisible(true);
+                obsVisibilityBtn.setVisible(true);
             }
 
             @Override
             public void windowLostFocus(java.awt.event.WindowEvent e) {
                 rewardsButton.setVisible(false);
+                obsVisibilityBtn.setVisible(false);
             }
         });
     }
@@ -721,10 +734,9 @@ public class ChatOverlay extends JFrame {
                 String[] parts = msg.eventExtra().split("\\|", 3);
                 String rewardId = parts.length > 1 ? parts[1] : null;
                 if (rewardId != null) {
-                    String type   = config.getRewardType(rewardId);
-                    String folder = config.getRewardFolder(rewardId);
-                    if (type != null && folder != null) {
-                        RewardMediaPlayer.play(type, folder);
+                    JSONObject rewardConfig = config.getRewardConfig(rewardId);
+                    if (rewardConfig != null) {
+                        RewardMediaPlayer.play(rewardId, rewardConfig);
                     }
                 }
             }
@@ -752,7 +764,9 @@ public class ChatOverlay extends JFrame {
                 tokens = msg.precomputedTokens();
             } else {
                 tokens = twitchEmoteCache.tokenize(msg.emotesHeader(), msg.text());
-                tokens = bttvEmoteCache.process(tokens);
+                if (bttvEmoteCache != null) {
+                    tokens = bttvEmoteCache.process(tokens);
+                }
                 badgeUrls = badgeCache.getBadgeUrls(msg.badgesHeader());
             }
 
@@ -762,6 +776,11 @@ public class ChatOverlay extends JFrame {
 
             // Guardar offset de fin y asociar al messageId y usuario
             int endOffset = doc.getLength();
+            // Si hay timeout (mayor que 0)
+            if (config.getMessageTimeout() > 0) {
+                messageTimestamps.addLast(new long[]{
+                    System.currentTimeMillis(), startOffset, endOffset});
+            }
             if (msg.messageId() != null) {
                 messageOffsets.put(msg.messageId(), new int[]{startOffset, endOffset});
                 System.err.println("[Chat] Guardado mensaje id=" + msg.messageId() + 
@@ -908,5 +927,91 @@ System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
             new RewardsPanel(this, eventSub, config).setVisible(true);
         });
         return btn;
+    }
+    private void startMessageCleanup() {
+        int timeoutSecs = config.getMessageTimeout();
+        if (timeoutSecs <= 0) return;
+
+        Timer cleanupTimer = new Timer(1000, e -> {
+            long now     = System.currentTimeMillis();
+            long limitMs = timeoutSecs * 1000L;
+
+            // Procesar en el EDT
+            while (!messageTimestamps.isEmpty()) {
+                long[] entry = messageTimestamps.peekFirst();
+                if (now - entry[0] < limitMs) break;
+
+                messageTimestamps.pollFirst();
+                // Borrar del documento
+                try {
+                    int start  = (int) entry[1];
+                    int length = (int) (entry[2] - entry[1]);
+                    // Los offsets se desplazan al borrar, así que siempre borramos desde 0
+                    // hasta el tamaño del primer mensaje
+                    StyledDocument doc = textPane.getStyledDocument();
+                    if (doc.getLength() >= length && length > 0) {
+                        doc.remove(0, length);
+                        // Ajustar todos los offsets restantes
+                        for (long[] remaining : messageTimestamps) {
+                            remaining[1] -= length;
+                            remaining[2] -= length;
+                        }
+                    }
+                } catch (Exception ex) {
+                    System.err.println("[Cleanup] Error: " + ex.getMessage());
+                }
+            }
+        });
+        cleanupTimer.start();
+    }
+
+    private JButton buildObsVisibilityButton() {
+        obsVisibilityBtn = new JButton("👁");
+        obsVisibilityBtn.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 13));
+        obsVisibilityBtn.setForeground(new Color(120, 120, 130)); // gris = oculto
+        obsVisibilityBtn.setBackground(new Color(24, 24, 28));
+        Dimension d = obsVisibilityBtn.getPreferredSize();
+        obsVisibilityBtn.setPreferredSize(new Dimension(d.width, d.height + 1));
+        obsVisibilityBtn.setBorder(BorderFactory.createLineBorder(
+                new Color(80, 80, 90), 1));
+        obsVisibilityBtn.setFocusPainted(false);
+        obsVisibilityBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        obsVisibilityBtn.setToolTipText("Mostrar/ocultar chat en OBS");
+        obsVisibilityBtn.setVisible(false); // solo con foco
+        obsVisibilityBtn.addActionListener(e -> toggleObsVisibility());
+        return obsVisibilityBtn;
+    }
+
+    private void toggleObsVisibility() {
+        visibleToObs = !visibleToObs;
+        applyObsVisibility();
+        // Actualizar aspecto del botón
+        if (visibleToObs) {
+            obsVisibilityBtn.setForeground(new Color(80, 200, 120)); // verde = visible
+            obsVisibilityBtn.setBorder(BorderFactory.createLineBorder(
+                    new Color(80, 200, 120), 1));
+            obsVisibilityBtn.setToolTipText("Chat visible en OBS — click para ocultar");
+        } else {
+            obsVisibilityBtn.setForeground(new Color(120, 120, 130)); // gris = oculto
+            obsVisibilityBtn.setBorder(BorderFactory.createLineBorder(
+                    new Color(80, 80, 90), 1));
+            obsVisibilityBtn.setToolTipText("Chat oculto en OBS — click para mostrar");
+        }
+    }
+
+    private void applyObsVisibility() {
+        try {
+            com.sun.jna.Pointer pointer = com.sun.jna.Native.getComponentPointer(this);
+            if (pointer == null) return;
+            com.sun.jna.platform.win32.WinDef.HWND hwnd =
+                    new com.sun.jna.platform.win32.WinDef.HWND(pointer);
+            // WDA_EXCLUDEFROMCAPTURE = 0x11 → oculto para OBS
+            // WDA_NONE = 0x00 → visible para OBS
+            int affinity = visibleToObs ? 0x00000000 : 0x00000011;
+            WindowClickThrough.User32Extra.INSTANCE
+                    .SetWindowDisplayAffinity(hwnd, affinity);
+        } catch (Exception e) {
+            System.err.println("[OBS] Error cambiando visibilidad: " + e.getMessage());
+        }
     }
 }

@@ -8,28 +8,54 @@ import com.chatoverlaystreaming.overlay.TwitchAuth;
 import com.chatoverlaystreaming.readers.TwitchChatReader;
 import com.chatoverlaystreaming.readers.TwitchEventSub;
 import com.chatoverlaystreaming.readers.YouTubeChatReader;
+
+import javafx.embed.swing.JFXPanel;
+
 import javax.swing.*;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Main {
 
     public static void main(String[] args) {
-        Logger.init();
-        // Shutdown hook para cerrar el log al salir
-        Runtime.getRuntime().addShutdownHook(new Thread(Logger::close));
         // Cargar configuración
         Config config;
         try {
             config = new Config();
             // config.descargarImagenesDesdeJsonObject(); // para descargar los emojis de YT
         } catch (Exception e) {
+            Logger.init();
             System.err.println("Error cargando configuración: " + e.getMessage());
+            // Shutdown hook para cerrar el log al salir
+            Runtime.getRuntime().addShutdownHook(new Thread(Logger::close));
             return;
         }
 
+        if(config.getLogActivity()) {
+            Logger.init();
+            // Shutdown hook para cerrar el log al salir
+            Runtime.getRuntime().addShutdownHook(new Thread(Logger::close));
+        }
+
+        // Inicializar JavaFX en el EDT
+        CountDownLatch fxLatch = new CountDownLatch(1);
+        SwingUtilities.invokeLater(() -> {
+            new JFXPanel(); // inicializa el toolkit de JavaFX
+            fxLatch.countDown();
+        });
+        try {
+            fxLatch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        System.out.println("[FX] Toolkit JavaFX inicializado.");
+
+
         BlockingQueue<ChatMessage> queue = new LinkedBlockingQueue<>(500);
         ImageCache sharedImageCache = new ImageCache(config.getIconSize());
+
+        // System.setProperty("prism.order", "d3d");
 
         TwitchAuth twitchAuth = new TwitchAuth(config.getTwitchClientId(), config);
         String accessToken;

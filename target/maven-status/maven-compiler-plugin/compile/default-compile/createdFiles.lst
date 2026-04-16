@@ -29,6 +29,7 @@ com\chatoverlaystreaming\emotes\BTTVEmoteCache.class
 com\chatoverlaystreaming\overlay\Config.class
 com\chatoverlaystreaming\overlay\VideoOverlay.class
 com\chatoverlaystreaming\model\EmoteToken.class
+com\chatoverlaystreaming\overlay\VideoOverlay$VideoPanel.class
 com\chatoverlaystreaming\readers\YouTubeChatReader$ChatEndedException.class
 com\chatoverlaystreaming\Logger$TeeOutputStream.class
 com\chatoverlaystreaming\overlay\RewardsPanel$4.class
@@ -43,11 +44,13 @@ com\chatoverlaystreaming\readers\TwitchChatReader.class
 com\chatoverlaystreaming\overlay\ChatOverlay$1.class
 com\chatoverlaystreaming\overlay\WrapEditorKitPro.class
 com\chatoverlaystreaming\readers\YouTubeChatReader.class
+com\chatoverlaystreaming\overlay\RewardsPanel$5.class
 com\chatoverlaystreaming\overlay\ChatOverlay$14.class
 com\chatoverlaystreaming\overlay\ChatOverlay$5.class
 com\chatoverlaystreaming\overlay\RewardMediaPlayer.class
 com\chatoverlaystreaming\emotes\TwitchEmoteCache.class
 com\chatoverlaystreaming\readers\YouTubeChatReader$QuotaExceededException.class
+com\chatoverlaystreaming\overlay\VideoOverlay$1.class
 com\chatoverlaystreaming\overlay\TwitchAuth.class
 com\chatoverlaystreaming\emotes\ImageCache.class
 com\chatoverlaystreaming\service\ViewerCountService.class

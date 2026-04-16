@@ -1,33 +1,38 @@
 {
-  "twitch": {
-    "channel": "nombre_del_canal",
-    "channelId": "123456789",
-    "clientId": "tu_client_id",
-    "clientSecret": "tu_client_secret_aqui",
-    "timeSpectatorUpdate": "60"
-  },
   "youtube": {
     "timeSpectatorUpdate": "60",
-    "channelId": "UCxxxxxx",
-    "videoId": "ID_DEL_VIDEO",
-    "apiKeys": ["TU_API_KEY",
-                "OTRA_APIKEY",
-                "OTRA_APIKEY"],
-    "lastPageToken": "Cg0KB...",
-    "lastVideoId": "ID_DEL_VIDEO"
+    "apiKeys": ["apikey1", "apikey2"],
+    "lastPageToken": "notocar",
+    "videoId": "video_youtube_id",
+    "lastVideoId": "notocar",
+    "channelId": "channelId"
+  },
+  "twitch": {
+    "clientId": "clientId_app",
+    "timeSpectatorUpdate": "60",
+    "channel": "nombre_canal",
+    "clientSecret": "clientSecret_app",
+    "accessToken": "",
+    "channelId": "channelId",
+    "refreshToken": ""
+  },
+  "twitchRewards": {
   },
   "panel": {
-    "alpha": 100,
+    "alpha": 240,
     "showBackground": true,
-    "x": 1441,
-    "width": 380,
-    "y": 408,
-    "height": 450,
-    "iconSize": 16
+    "x": 1536,
+    "width": 356,
+    "y": 554,
+    "iconSize": 12,
+    "height": 356
   },
   "misc": {
     "canClickLink": true,
+    "minPollingInterval": 8,
     "showViewerCount": true,
-    "minPollingInterval": 8
+    "loadBTTV": true,
+    "messageTimeoutSeconds": 30,
+    "logActivity": true
   }
 }

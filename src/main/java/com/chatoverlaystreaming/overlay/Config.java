@@ -39,10 +39,7 @@ public class Config {
         youtube = root.getJSONObject("youtube");
         panel = root.getJSONObject("panel");
         misc = root.getJSONObject("misc");
-        if (!root.has("twitchRewards")) {
-            root.put("twitchRewards", new JSONObject());
-        }
-        twitchRewards = root.getJSONObject("twitchRewards");
+        twitchRewards = getTwitchRewards();
         
     }
 
@@ -69,6 +66,7 @@ public class Config {
     public String getYoutubeLastPageToken() { return youtube.optString("lastPageToken", null);  }
     public String getYoutubeLastVideoId() { return youtube.optString("lastVideoId", null); }
     public long getYoutubeSpectatorUpdate()  { return youtube.optLong("timeSpectatorUpdate", 60);  }
+
     public int getPanelX()   { return panel.optInt("x", 10);   }
     public int getPanelY()   { return panel.optInt("y", 150);   }
     public int getPanelWidth()   { return panel.optInt("width", 400);   }
@@ -76,9 +74,20 @@ public class Config {
     public int getPanelAlpha()   { return panel.optInt("alpha", 200);   }
     public boolean getShowBackground() { return panel.optBoolean("showBackground", true); }
     public int getIconSize() { return panel.optInt("iconSize", 13); }
+
     public int getMinPollingInterval() { return misc.optInt("minPollingInterval", 8); }
     public boolean getShowViewerCount() { return misc.optBoolean("showViewerCount", true); }
     public boolean getCanClickLink() { return misc.optBoolean("canClickLink", true); }
+    public boolean getLoadBTTV() { return misc.optBoolean("loadBTTV", true); }
+    public int getMessageTimeout() { return misc.optInt("messageTimeoutSeconds", 0); } // 0 = no borrar
+    public boolean getLogActivity() { return misc.optBoolean("logActivity", false); } // 0 = no borrar
+
+    // Recompensa completa
+    public JSONObject getRewardConfig(String rewardId) {
+        JSONObject rewards = getTwitchRewards();
+        if (!rewards.has(rewardId)) return null;
+        return rewards.getJSONObject(rewardId);
+    }
 
     public List<String> getYoutubeApiKeys() {
         // Soportar tanto apiKeys (array) como apiKey (string único)
@@ -93,6 +102,11 @@ public class Config {
             return List.of(youtube.getString("apiKey"));
         }
         throw new RuntimeException("No se encontró ninguna API key de YouTube en el config.");
+    }
+
+    public void saveTwitchReward(String rewardId, JSONObject rewardConfig) throws IOException {
+        getTwitchRewards().put(rewardId, rewardConfig);
+        Files.writeString(Paths.get("config.json"), root.toString(2));
     }
 
     public void savePanel(int x, int y, int width, int height) throws IOException {
@@ -133,6 +147,13 @@ public class Config {
         twitch.put("accessToken", accessToken);
         twitch.put("refreshToken", refreshToken);
         Files.writeString(Paths.get("config.json"), root.toString(2));
+    }
+
+    public JSONObject getTwitchRewards() {
+        if (!root.has("twitchRewards")) {
+            root.put("twitchRewards", new JSONObject());
+        }
+        return root.getJSONObject("twitchRewards");
     }
 
     public void saveTwitchReward(String rewardId, String type, String folder) throws IOException {

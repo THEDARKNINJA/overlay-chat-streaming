@@ -7,6 +7,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ItemEvent;
+import java.io.File;
 import java.nio.file.*;
 import java.util.List;
 
@@ -38,7 +39,20 @@ public class RewardsPanel extends JDialog {
     private JCheckBox   cooldownCheck;
     private JSpinner    cooldownSpinner;
     private JComboBox<String> typeCombo;
-    private JTextField  folderField;
+    // private JTextField  folderField;
+    private JCheckBox   recursiveCheck;
+    private JComboBox<String> playModeCombo;
+    private JTextField  pathField;
+    private JButton     pathBrowseBtn;
+    private JSlider     volumeSlider;
+    private JLabel      volumeLabel;
+    private JComboBox<String> displayCombo;
+
+    // Campos solo para vídeo
+    private JSpinner    videoWidthSpinner;
+    private JSpinner    videoHeightSpinner;
+    private JPanel      videoSizePanel;
+    private JComboBox<Integer> fpsCombo;
     
 
     // Botones
@@ -170,7 +184,7 @@ public class RewardsPanel extends JDialog {
         addFormRow(form, gbc, row++, "", enabledCheck);
 
         // Cooldown
-        JPanel cooldownPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JPanel cooldownPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         cooldownPanel.setBackground(BG);
         cooldownCheck = styledCheckBox("Cooldown global (seg):");
         cooldownSpinner = new JSpinner(new SpinnerNumberModel(60, 1, 86400, 10));
@@ -195,7 +209,112 @@ public class RewardsPanel extends JDialog {
         styleCombo(typeCombo);
         addFormRow(form, gbc, row++, "Tipo:", typeCombo);
 
+// Path (con botón de explorador)
+JPanel pathPanel = new JPanel(new BorderLayout(4, 0));
+pathPanel.setBackground(BG);
+pathField = new JTextField(20);
+styleField(pathField);
+pathBrowseBtn = styledButton("📁", ACCENT);
+pathBrowseBtn.setPreferredSize(new Dimension(36, 26));
+pathBrowseBtn.addActionListener(e -> browsePath());
+pathPanel.add(pathField,      BorderLayout.CENTER);
+pathPanel.add(pathBrowseBtn,  BorderLayout.EAST);
+addFormRow(form, gbc, row++, "Carpeta:", pathPanel);
+
+// Recursivo
+recursiveCheck = styledCheckBox("Buscar en subcarpetas");
+addFormRow(form, gbc, row++, "", recursiveCheck);
+
+// Modo de reproducción
+playModeCombo = new JComboBox<>(new String[]{
+    "random", "sequential", "random_no_repeat"});
+playModeCombo.setRenderer(new DefaultListCellRenderer() {
+    @Override
+    public Component getListCellRendererComponent(JList<?> list,
+            Object value, int index, boolean isSelected, boolean cellHasFocus) {
+        super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+        setBackground(isSelected ? ACCENT.darker() : BG2);
+        setForeground(FG);
+        setText(switch ((String) value) {
+            case "random"          -> "Aleatorio";
+            case "sequential"      -> "Secuencial";
+            case "random_no_repeat"-> "Aleatorio sin repetir";
+            default -> (String) value;
+        });
+        return this;
+    }
+});
+styleCombo(playModeCombo);
+addFormRow(form, gbc, row++, "Reproducción:", playModeCombo);
+
+// Volumen
+JPanel volumePanel = new JPanel(new BorderLayout(6, 0));
+volumePanel.setBackground(BG);
+volumeSlider = new JSlider(0, 100, 100);
+volumeSlider.setBackground(BG);
+volumeSlider.setForeground(ACCENT);
+volumeLabel  = styledLabel("100%");
+volumeSlider.addChangeListener(e ->
+    volumeLabel.setText(volumeSlider.getValue() + "%"));
+volumePanel.add(volumeSlider, BorderLayout.CENTER);
+volumePanel.add(volumeLabel,  BorderLayout.EAST);
+addFormRow(form, gbc, row++, "Volumen:", volumePanel);
+
+// Tamaño vídeo (solo visible si tipo = video)
+videoSizePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+videoSizePanel.setBackground(BG);
+videoWidthSpinner  = new JSpinner(new SpinnerNumberModel(480, 160, 3840, 10));
+videoHeightSpinner = new JSpinner(new SpinnerNumberModel(270, 90,  2160, 10));
+styleSpinner(videoWidthSpinner);
+styleSpinner(videoHeightSpinner);
+videoWidthSpinner.setPreferredSize(new Dimension(80, 26));
+videoHeightSpinner.setPreferredSize(new Dimension(80, 26));
+videoSizePanel.add(styledLabel("Ancho:"));
+videoSizePanel.add(videoWidthSpinner);
+videoSizePanel.add(styledLabel("  Alto:"));
+videoSizePanel.add(videoHeightSpinner);
+addFormRow(form, gbc, row++, "Tamaño vídeo:", videoSizePanel);
+fpsCombo = new JComboBox<>(new Integer[]{30, 60});
+styleCombo(fpsCombo);
+fpsCombo.setSelectedItem(30);
+addFormRow(form, gbc, row++, "FPS captura:", fpsCombo);
+
+// Pantalla de reproducción
+displayCombo = new JComboBox<>();
+styleCombo(displayCombo);
+
+// Poblar con las pantallas disponibles
+GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+GraphicsDevice[] screens = ge.getScreenDevices();
+displayCombo.addItem("Pantalla principal (visible en OBS por captura de ventana)");
+for (int i = 1; i < screens.length; i++) {
+    DisplayMode dm = screens[i].getDisplayMode();
+    displayCombo.addItem("Pantalla " + (i + 1) + 
+            " (" + dm.getWidth() + "x" + dm.getHeight() + ")");
+}
+
+// Solo visible para vídeo
+JPanel displayPanel = new JPanel(new BorderLayout());
+displayPanel.setBackground(BG);
+displayPanel.add(displayCombo);
+addFormRow(form, gbc, row++, "Reproducir en:", displayPanel);
+
+
+
+// Mostrar/ocultar tamaño según tipo seleccionado
+typeCombo.addItemListener(e -> {
+    if (e.getStateChange() == ItemEvent.SELECTED) {
+        boolean isVideo = "video".equals(typeCombo.getSelectedItem());
+        videoSizePanel.setVisible(isVideo);
+        displayPanel.setVisible(isVideo);
+        pack();
+    }
+});
+videoSizePanel.setVisible(false); // oculto por defecto
+displayPanel.setVisible(false);
+
         // Carpeta
+        /*
         folderField = new JTextField(24);
         styleField(folderField);
         JLabel folderHint = styledLabel("  (se crea en rewards/)");
@@ -206,6 +325,7 @@ public class RewardsPanel extends JDialog {
         folderPanel.add(folderField, BorderLayout.CENTER);
         folderPanel.add(folderHint,  BorderLayout.EAST);
         addFormRow(form, gbc, row++, "Carpeta:", folderPanel);
+ */
 
         root.add(form, BorderLayout.CENTER);
 
@@ -264,6 +384,7 @@ public class RewardsPanel extends JDialog {
         // Cargar datos de la recompensa seleccionada
         JSONObject reward = rewardsList.get(idx - 1);
         String rewardId   = reward.getString("id");
+        JSONObject rewardConfig = config.getRewardConfig(rewardId);
 
         titleField.setText(reward.optString("title", ""));
         promptField.setText(reward.optString("prompt", ""));
@@ -280,10 +401,34 @@ public class RewardsPanel extends JDialog {
         cooldownSpinner.setValue(reward.optInt("global_cooldown_seconds", 60));
 
         // Datos locales del config
+        /*
         String type   = config.getRewardType(rewardId);
         String folder = config.getRewardFolder(rewardId);
         typeCombo.setSelectedItem(type != null ? type : "audio");
         folderField.setText(folder != null ? folder : "");
+         */
+
+        if (rewardConfig != null) {
+            String type = rewardConfig.optString("type", "audio");
+            typeCombo.setSelectedItem(type);
+            pathField.setText(rewardConfig.optString("path", ""));
+            recursiveCheck.setSelected(rewardConfig.optBoolean("recursive", false));
+            playModeCombo.setSelectedItem(rewardConfig.optString("playMode", "random"));
+            volumeSlider.setValue((int)(rewardConfig.optDouble("volume", 1.0) * 100));
+            if ("video".equals(type)) {
+                videoWidthSpinner.setValue(rewardConfig.optInt("width", 480));
+                videoHeightSpinner.setValue(rewardConfig.optInt("height", 270));
+                fpsCombo.setSelectedItem(rewardConfig.optInt("fps", 60));
+                videoSizePanel.setVisible(true);
+            } else {
+                videoSizePanel.setVisible(false);
+            }
+            int displayIndex = rewardConfig.optInt("displayIndex", 0);
+            if (displayIndex < displayCombo.getItemCount()) {
+                displayCombo.setSelectedIndex(displayIndex);
+            }
+            pack();
+        }
 
         deleteBtn.setVisible(true);
     }
@@ -300,29 +445,63 @@ public class RewardsPanel extends JDialog {
         cooldownSpinner.setEnabled(false);
         cooldownSpinner.setValue(60);
         typeCombo.setSelectedIndex(0);
-        folderField.setText("");
+        // folderField.setText("");
+        recursiveCheck.setSelected(false);
+        playModeCombo.setSelectedIndex(0);
+        pathField.setText("");
+        volumeSlider.setValue(100);
+        videoWidthSpinner.setValue(480);
+        videoHeightSpinner.setValue(270);
+        videoSizePanel.setVisible(false);
+        fpsCombo.setSelectedItem(60);
+        displayCombo.setSelectedIndex(0);
+    }
+
+    private void browsePath() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setDialogTitle("Seleccionar carpeta de medios");
+
+        String current = pathField.getText().trim();
+        if (!current.isBlank()) {
+            File currentDir = new File(current);
+            if (currentDir.exists()) {
+                chooser.setCurrentDirectory(currentDir);
+            }
+        }
+
+        int result = chooser.showOpenDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            pathField.setText(chooser.getSelectedFile().getAbsolutePath());
+        }
     }
 
     private void onSave() {
-        String title  = titleField.getText().trim();
-        String prompt = promptField.getText().trim();
-        int cost      = (int) costSpinner.getValue();
-        String color  = colorField.getText().trim();
-        boolean userInput  = userInputCheck.isSelected();
-        boolean enabled = enabledCheck.isSelected();
-        boolean skipQueue  = skipQueueCheck.isSelected();
+        String title    = titleField.getText().trim();
+        String prompt   = promptField.getText().trim();
+        int    cost     = (int) costSpinner.getValue();
+        String color    = colorField.getText().trim();
+        boolean userInput   = userInputCheck.isSelected();
+        boolean skipQueue   = skipQueueCheck.isSelected();
+        boolean enabled     = enabledCheck.isSelected();
         boolean hasCooldown = cooldownCheck.isSelected();
-        int cooldownSecs   = (int) cooldownSpinner.getValue();
-        String type   = (String) typeCombo.getSelectedItem();
-        String folder = folderField.getText().trim();
+        int cooldownSecs    = (int) cooldownSpinner.getValue();
+        String type      = (String) typeCombo.getSelectedItem();
+        String path      = pathField.getText().trim();
+        boolean recursive = recursiveCheck.isSelected();
+        String playMode  = (String) playModeCombo.getSelectedItem();
+        double volume    = volumeSlider.getValue() / 100.0;
+        int vidWidth     = (int) videoWidthSpinner.getValue();
+        int vidHeight    = (int) videoHeightSpinner.getValue();
+        int displayIndex = displayCombo.getSelectedIndex();
 
         if (title.isBlank()) {
             JOptionPane.showMessageDialog(this, "El título no puede estar vacío.",
                     "Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        if (folder.isBlank()) {
-            JOptionPane.showMessageDialog(this, "El nombre de carpeta no puede estar vacío.",
+        if (path.isBlank()) {
+            JOptionPane.showMessageDialog(this, "La carpeta no puede estar vacía.",
                     "Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -332,40 +511,52 @@ public class RewardsPanel extends JDialog {
 
         int idx = rewardCombo.getSelectedIndex();
         boolean isNew = (idx <= 0 || rewardsList == null || idx - 1 >= rewardsList.size());
+        String existingId = isNew ? null : rewardsList.get(idx - 1).getString("id");
 
         SwingWorker<JSONObject, Void> worker = new SwingWorker<>() {
             @Override
             protected JSONObject doInBackground() throws Exception {
-                // Crear directorio si no existe
-                Path dir = Paths.get("rewards", folder);
-                if (!Files.exists(dir)) Files.createDirectories(dir);
-
                 if (isNew) {
                     return eventSub.createReward(title, prompt, cost,
-                            userInput, skipQueue, color, hasCooldown, cooldownSecs, enabled);
+                            userInput, skipQueue, color,
+                            hasCooldown, cooldownSecs, enabled);
                 } else {
-                    String rewardId = rewardsList.get(idx - 1).getString("id");
-                    return eventSub.updateReward(rewardId, title, prompt, cost,
-                            userInput, skipQueue, color, hasCooldown, cooldownSecs, enabled);
+                    return eventSub.updateReward(existingId, title, prompt, cost,
+                            userInput, skipQueue, color,
+                            hasCooldown, cooldownSecs, enabled);
                 }
             }
 
             @Override
             protected void done() {
                 try {
-                    JSONObject result = get();
-                    String rewardId = result.getString("id");
-                    config.saveTwitchReward(rewardId, type, folder);
+                    JSONObject result   = get();
+                    String rewardId     = result.getString("id");
+
+                    // Construir config local
+                    JSONObject rewardConfig = new JSONObject();
+                    rewardConfig.put("type",      type);
+                    rewardConfig.put("path",      path);
+                    rewardConfig.put("recursive", recursive);
+                    rewardConfig.put("playMode",  playMode);
+                    rewardConfig.put("volume",    volume);
+                    if ("video".equals(type)) {
+                        rewardConfig.put("width",  vidWidth);
+                        rewardConfig.put("height", vidHeight);
+                        rewardConfig.put("displayIndex", displayIndex);
+                        rewardConfig.put("fps", fpsCombo.getSelectedItem());
+                    }
+
+                    config.saveTwitchReward(rewardId, rewardConfig);
                     System.out.println("[RewardsPanel] Guardado OK: " + rewardId);
                     JOptionPane.showMessageDialog(RewardsPanel.this,
                             "Recompensa guardada correctamente.",
                             "OK", JOptionPane.INFORMATION_MESSAGE);
                     loadRewards();
                 } catch (Exception e) {
-                    System.err.println("[RewardsPanel] Error en done(): " + e.getMessage());
-                    e.printStackTrace();
+                    System.err.println("[RewardsPanel] Error: " + e.getMessage());
                     JOptionPane.showMessageDialog(RewardsPanel.this,
-                            "Error guardando recompensa:\n" + e.getMessage(),
+                            "Error guardando:\n" + e.getMessage(),
                             "Error", JOptionPane.ERROR_MESSAGE);
                 } finally {
                     saveBtn.setEnabled(true);
