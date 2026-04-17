@@ -55,6 +55,7 @@ public class TwitchAuth {
                     return newToken;
                 } catch (Exception e) {
                     System.err.println("[Auth] No se pudo refrescar: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
         }

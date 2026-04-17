@@ -4,6 +4,7 @@ import java.io.*;
 import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.nio.charset.StandardCharsets;
 
 public class Logger {
 
@@ -15,6 +16,8 @@ public class Logger {
 
     public static void init() {
         try {
+            System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
+            System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
             Path logsDir = Paths.get("logs");
             if (!Files.exists(logsDir)) Files.createDirectory(logsDir);
 

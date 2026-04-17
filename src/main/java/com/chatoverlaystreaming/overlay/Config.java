@@ -9,7 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.Map;
+//import java.util.Map;
 
 // Descargado de emojis custom de YT
 //import java.util.Iterator;
@@ -26,7 +26,9 @@ public class Config {
     private final JSONObject misc;
 
     public Config() throws IOException {
-        Path configPath = Paths.get("config.json");
+        //Path configPath = Paths.get("config.json");
+        Path configPath = getPathJSON();
+
         if (!Files.exists(configPath)) {
             throw new IOException(
                 "No se encontró config.json. " +
@@ -41,6 +43,11 @@ public class Config {
         misc = root.getJSONObject("misc");
         twitchRewards = getTwitchRewards();
         
+    }
+
+    private Path getPathJSON() {
+        Path appDir = Paths.get(System.getProperty("user.dir"));
+        return appDir.resolve("config.json");
     }
 
     public String getTwitchChannel()   { return twitch.optString("channel", "");   }
@@ -106,7 +113,7 @@ public class Config {
 
     public void saveTwitchReward(String rewardId, JSONObject rewardConfig) throws IOException {
         getTwitchRewards().put(rewardId, rewardConfig);
-        Files.writeString(Paths.get("config.json"), root.toString(2));
+        Files.writeString(getPathJSON(), root.toString(2));
     }
 
     public void savePanel(int x, int y, int width, int height) throws IOException {
@@ -119,7 +126,7 @@ public class Config {
 
         // Escribir al disco con formato legible
         Files.writeString(
-            Paths.get("config.json"),
+            getPathJSON(),
             root.toString(2)  // el 2 es la indentación
         );
     }
@@ -131,7 +138,7 @@ public class Config {
 
         // Escribir al disco con formato legible
         Files.writeString(
-            Paths.get("config.json"),
+            getPathJSON(),
             root.toString(2)  // el 2 es la indentación
         );
     }
@@ -139,14 +146,14 @@ public class Config {
     public void saveYoutubePageToken(String videoId, String pageToken) throws IOException {
         youtube.put("lastVideoId", videoId);
         youtube.put("lastPageToken", pageToken);
-        Files.writeString(Paths.get("config.json"), root.toString(2));
+        Files.writeString(getPathJSON(), root.toString(2));
     }
 
 
     public void saveTwitchTokens(String accessToken, String refreshToken) throws IOException {
         twitch.put("accessToken", accessToken);
         twitch.put("refreshToken", refreshToken);
-        Files.writeString(Paths.get("config.json"), root.toString(2));
+        Files.writeString(getPathJSON(), root.toString(2));
     }
 
     public JSONObject getTwitchRewards() {
@@ -161,12 +168,89 @@ public class Config {
         entry.put("type", type);
         entry.put("folder", folder);
         twitchRewards.put(rewardId, entry);
-        Files.writeString(Paths.get("config.json"), root.toString(2));
+        Files.writeString(getPathJSON(), root.toString(2));
     }
 
     public void deleteTwitchReward(String rewardId) throws IOException {
         twitchRewards.remove(rewardId);
-        Files.writeString(Paths.get("config.json"), root.toString(2));
+        Files.writeString(getPathJSON(), root.toString(2));
+    }
+
+    public void saveAll(
+        String twitchChannel, String twitchChannelId,
+        String twitchClientId, String twitchClientSecret,
+        String ytChannelId, String ytVideoId, List<String> apiKeys,
+        int alpha, boolean showBackground, int iconSize,
+        int minPollingInterval, boolean showViewerCount,
+        boolean canClickLink, boolean loadBTTV,
+        int messageTimeoutSeconds, boolean logActivity) throws IOException {
+
+        twitch.put("channel",       twitchChannel);
+        twitch.put("channelId",     twitchChannelId);
+        twitch.put("clientId",      twitchClientId);
+        twitch.put("clientSecret",  twitchClientSecret);
+
+        youtube.put("channelId", ytChannelId);
+        youtube.put("videoId",   ytVideoId);
+        org.json.JSONArray keys = new org.json.JSONArray();
+        apiKeys.forEach(keys::put);
+        youtube.put("apiKeys", keys);
+
+        panel.put("alpha",          alpha);
+        panel.put("showBackground", showBackground);
+        panel.put("iconSize",       iconSize);
+
+        misc.put("minPollingInterval",    minPollingInterval);
+        misc.put("showViewerCount",       showViewerCount);
+        misc.put("canClickLink",          canClickLink);
+        misc.put("loadBTTV",              loadBTTV);
+        misc.put("messageTimeoutSeconds", messageTimeoutSeconds);
+        misc.put("logActivity",           logActivity);
+
+        Files.writeString(getPathJSON(), root.toString(2));
+    }
+    
+    public static Config createDefault() throws IOException {
+        // Crear un config.json vacío con estructura mínima si no existe
+        Path appDir = Paths.get(System.getProperty("user.dir"));
+        Path configPath = appDir.resolve("config.json");
+        if (!Files.exists(configPath)) {
+            String defaultConfig = """
+                {
+                "twitch": {
+                    "channel": "",
+                    "channelId": "",
+                    "clientId": "",
+                    "clientSecret": "",
+                    "accessToken": "",
+                    "refreshToken": ""
+                },
+                "youtube": {
+                    "apiKeys": [],
+                    "videoId": "",
+                    "channelId": ""
+                },
+                "panel": {
+                    "x": 100, "y": 100,
+                    "width": 380, "height": 450,
+                    "alpha": 200,
+                    "showBackground": true,
+                    "iconSize": 16
+                },
+                "misc": {
+                    "showViewerCount": true,
+                    "minPollingInterval": 10000,
+                    "loadBTTV": true,
+                    "canClickLink": true,
+                    "messageTimeoutSeconds": 0,
+                    "logActivity": true
+                },
+                "twitchRewards": {}
+                }
+                """;
+            Files.writeString(configPath, defaultConfig);
+        }
+        return new Config();
     }
 
     // Si se van a descargar nuevos emojis de youtube,

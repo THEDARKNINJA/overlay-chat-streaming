@@ -65,6 +65,7 @@ public class VideoOverlay extends JFrame {
         setTitle("OverlayVideo");
         setSize(width, height);
         setBackground(java.awt.Color.BLACK);
+        setIconImage( new ImageIcon("icon.png").getImage() );
 
         positionOnScreen();
 

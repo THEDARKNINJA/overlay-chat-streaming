@@ -27,7 +27,7 @@ public class ChatOverlay extends JFrame {
 
     private final JTextPane textPane;
     private final StyledDocument doc;
-    private static final int MAX_MESSAGES = 100;
+    private static final int MAX_MESSAGES = 20;
 
     private final TwitchEmoteCache  twitchEmoteCache = new TwitchEmoteCache();
     private final BTTVEmoteCache    bttvEmoteCache;
@@ -38,9 +38,11 @@ public class ChatOverlay extends JFrame {
     // usuario -> lista de messageIds
     private final Map<String, List<String>> userMessages = new LinkedHashMap<>();
     private final java.util.Deque<long[]> messageTimestamps = new java.util.ArrayDeque<>();
+    private final java.util.Deque<MessageEntry> messageEntries = new java.util.ArrayDeque<>();
     private WindowClickThrough clickThrough;
     // private TrayIcon trayIcon;
     private JButton rewardsButton;
+    private JButton configButton;
     private JPanel dragBar;
     private Rectangle closeButtonRect = new Rectangle();
     private Rectangle resizeHandleRect = new Rectangle();
@@ -60,6 +62,19 @@ public class ChatOverlay extends JFrame {
     private javax.swing.Timer saveTimer;
     private TwitchEventSub eventSub;
 
+    // Clase interna para cada mensaje:
+    private static class MessageEntry {
+        final long timestamp;
+        final Position startPos;
+        final Position endPos;
+
+        MessageEntry(long timestamp, Position startPos, Position endPos) {
+            this.timestamp = timestamp;
+            this.startPos  = startPos;
+            this.endPos    = endPos;
+        }
+    }
+
     public ChatOverlay(BlockingQueue<ChatMessage> queue,
                        String twitchChannelId,
                        String twitchClientId,
@@ -71,9 +86,13 @@ public class ChatOverlay extends JFrame {
         textPane = new JTextPane();
         rewardsButton = buildRewardsButton();
         obsVisibilityBtn = buildObsVisibilityButton();
+        configButton = buildConfigButton();
 
         twitchIcon  = loadIcon("/icons/twitch.png", 14);
         youtubeIcon = loadIcon("/icons/youtube.png", 14);
+
+        // Icono barra tareas
+        setIconImage( new ImageIcon("icon.png").getImage() );
         
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setUndecorated(true);
@@ -283,6 +302,7 @@ public class ChatOverlay extends JFrame {
         JPanel rewardsWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         rewardsWrapper.setBackground(new Color(14, 14, 16));
         rewardsWrapper.add(rewardsButton);
+        rewardsWrapper.add(configButton);
         rewardsWrapper.add(obsVisibilityBtn);
         //panel.add(rewardsWrapper, BorderLayout.SOUTH);
 
@@ -506,6 +526,7 @@ public class ChatOverlay extends JFrame {
         });
         consumer.setDaemon(true);
         consumer.start();
+        startMessageCleanup();
     }
 
     /**
@@ -556,12 +577,14 @@ public class ChatOverlay extends JFrame {
             public void windowGainedFocus(java.awt.event.WindowEvent e) {
                 rewardsButton.setVisible(true);
                 obsVisibilityBtn.setVisible(true);
+                configButton.setVisible(true);
             }
 
             @Override
             public void windowLostFocus(java.awt.event.WindowEvent e) {
                 rewardsButton.setVisible(false);
                 obsVisibilityBtn.setVisible(false);
+                configButton.setVisible(false);
             }
         });
     }
@@ -777,10 +800,9 @@ public class ChatOverlay extends JFrame {
             // Guardar offset de fin y asociar al messageId y usuario
             int endOffset = doc.getLength();
             // Si hay timeout (mayor que 0)
-            if (config.getMessageTimeout() > 0) {
-                messageTimestamps.addLast(new long[]{
-                    System.currentTimeMillis(), startOffset, endOffset});
-            }
+            // Registrar si hay timeout configurado
+            registerForCleanup(doc, startOffset, endOffset);
+            
             if (msg.messageId() != null) {
                 messageOffsets.put(msg.messageId(), new int[]{startOffset, endOffset});
                 System.err.println("[Chat] Guardado mensaje id=" + msg.messageId() + 
@@ -933,36 +955,63 @@ System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
         if (timeoutSecs <= 0) return;
 
         Timer cleanupTimer = new Timer(1000, e -> {
-            long now     = System.currentTimeMillis();
+            if (messageEntries.isEmpty()) return;
+
             long limitMs = timeoutSecs * 1000L;
+            long now     = System.currentTimeMillis();
 
-            // Procesar en el EDT
-            while (!messageTimestamps.isEmpty()) {
-                long[] entry = messageTimestamps.peekFirst();
-                if (now - entry[0] < limitMs) break;
+            // Acumular los rangos a borrar de más antiguo a más nuevo
+            // para poder borrarlos de atrás hacia adelante sin
+            // que se desplacen los offsets de los siguientes
+            java.util.List<int[]> toDelete = new java.util.ArrayList<>();
 
-                messageTimestamps.pollFirst();
-                // Borrar del documento
+            while (!messageEntries.isEmpty()) {
+                MessageEntry entry = messageEntries.peekFirst();
+                if (now - entry.timestamp < limitMs) break;
+                messageEntries.pollFirst();
+
+                int start = entry.startPos.getOffset();
+                int end   = entry.endPos.getOffset();
+                if (end > start) {
+                    toDelete.add(new int[]{start, end});
+                }
+            }
+
+            if (toDelete.isEmpty()) return;
+
+            // Borrar de atrás hacia adelante para no desplazar offsets
+            StyledDocument doc = textPane.getStyledDocument();
+            for (int i = toDelete.size() - 1; i >= 0; i--) {
+                int start  = toDelete.get(i)[0];
+                int length = toDelete.get(i)[1] - start;
                 try {
-                    int start  = (int) entry[1];
-                    int length = (int) (entry[2] - entry[1]);
-                    // Los offsets se desplazan al borrar, así que siempre borramos desde 0
-                    // hasta el tamaño del primer mensaje
-                    StyledDocument doc = textPane.getStyledDocument();
-                    if (doc.getLength() >= length && length > 0) {
-                        doc.remove(0, length);
-                        // Ajustar todos los offsets restantes
-                        for (long[] remaining : messageTimestamps) {
-                            remaining[1] -= length;
-                            remaining[2] -= length;
-                        }
+                    if (start + length <= doc.getLength()) {
+                        doc.remove(start, length);
                     }
-                } catch (Exception ex) {
-                    System.err.println("[Cleanup] Error: " + ex.getMessage());
+                } catch (BadLocationException ex) {
+                    System.err.println("[Cleanup] Error borrando: " + ex.getMessage());
                 }
             }
         });
         cleanupTimer.start();
+    }
+
+    private JButton buildConfigButton() {
+        configButton = new JButton("⚙");
+        configButton.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 13));
+        configButton.setForeground(new Color(200, 200, 210));
+        configButton.setBackground(new Color(24, 24, 28));
+        Dimension d = configButton.getPreferredSize();
+        configButton.setPreferredSize(new Dimension(d.width, d.height + 1));
+        configButton.setBorder(BorderFactory.createLineBorder(
+                new Color(100, 100, 110), 1));
+        configButton.setFocusPainted(false);
+        configButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        configButton.setToolTipText("Configuración");
+        configButton.setVisible(false);
+        configButton.addActionListener(e ->
+                new ConfigPanel(this, config).setVisible(true));
+        return configButton;
     }
 
     private JButton buildObsVisibilityButton() {
@@ -1012,6 +1061,44 @@ System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
                     .SetWindowDisplayAffinity(hwnd, affinity);
         } catch (Exception e) {
             System.err.println("[OBS] Error cambiando visibilidad: " + e.getMessage());
+        }
+    }
+
+    public void appendSystemMessage(String message) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                StyledDocument doc = textPane.getStyledDocument();
+                int startOffset = doc.getLength();
+
+                SimpleAttributeSet style = new SimpleAttributeSet();
+                StyleConstants.setFontFamily(style, "Segoe UI Emoji");
+                StyleConstants.setFontSize(style, 13);
+                StyleConstants.setForeground(style, new Color(160, 160, 180));
+                StyleConstants.setItalic(style, true);
+                doc.insertString(doc.getLength(), message + "\n", style);
+
+                int endOffset = doc.getLength();
+
+                // Registrar para cleanup igual que los mensajes normales
+                registerForCleanup(doc, startOffset, endOffset);
+
+            } catch (Exception e) {
+                System.err.println("[ChatOverlay] Error mostrando mensaje sistema: "
+                        + e.getMessage());
+            }
+        });
+    }
+    private void registerForCleanup(StyledDocument doc,
+                                  int startOffset, int endOffset) {
+        if (config.getMessageTimeout() <= 0) return;
+        try {
+            Position startPos = doc.createPosition(startOffset);
+            Position endPos   = doc.createPosition(endOffset);
+            messageEntries.addLast(new MessageEntry(
+                    System.currentTimeMillis(), startPos, endPos));
+        } catch (BadLocationException e) {
+            System.err.println("[Cleanup] Error registrando posición: "
+                    + e.getMessage());
         }
     }
 }

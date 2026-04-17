@@ -17,97 +17,165 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Main {
-
     public static void main(String[] args) {
-        // Cargar configuración
-        Config config;
-        try {
-            config = new Config();
-            // config.descargarImagenesDesdeJsonObject(); // para descargar los emojis de YT
-        } catch (Exception e) {
-            Logger.init();
-            System.err.println("Error cargando configuración: " + e.getMessage());
-            // Shutdown hook para cerrar el log al salir
-            Runtime.getRuntime().addShutdownHook(new Thread(Logger::close));
-            return;
-        }
+        Logger.init();
+        Runtime.getRuntime().addShutdownHook(new Thread(Logger::close));
 
-        if(config.getLogActivity()) {
-            Logger.init();
-            // Shutdown hook para cerrar el log al salir
-            Runtime.getRuntime().addShutdownHook(new Thread(Logger::close));
-        }
-
-        // Inicializar JavaFX en el EDT
+        // Inicializar JavaFX antes de todo
         CountDownLatch fxLatch = new CountDownLatch(1);
         SwingUtilities.invokeLater(() -> {
-            new JFXPanel(); // inicializa el toolkit de JavaFX
+            new javax.swing.JPanel(); // asegurar EDT
+            new javafx.embed.swing.JFXPanel(); // inicializar toolkit JavaFX
             fxLatch.countDown();
         });
-        try {
-            fxLatch.await();
-        } catch (InterruptedException e) {
+        try { fxLatch.await(); } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        System.out.println("[FX] Toolkit JavaFX inicializado.");
 
+        // Cargar config — si falla, usar config vacío con defaults
+        Config config;
+        boolean configOk = true;
+        try {
+            config = new Config();
+        } catch (Exception e) {
+            System.err.println("[Main] Error cargando config: " + e.getMessage());
+            try {
+                config = Config.createDefault();
+            } catch (Exception ex) {
+                System.err.println("[Main] No se pudo crear config por defecto: "
+                        + ex.getMessage());
+                return;
+            }
+            configOk = false;
+        }
+
+        final Config finalConfig = config;
+        final boolean finalConfigOk = configOk;
 
         BlockingQueue<ChatMessage> queue = new LinkedBlockingQueue<>(500);
         ImageCache sharedImageCache = new ImageCache(config.getIconSize());
 
-        // System.setProperty("prism.order", "d3d");
+        // Crear EventSub antes del overlay para poder pasarlo
+        TwitchEventSub[] eventSubHolder = {null};
 
-        TwitchAuth twitchAuth = new TwitchAuth(config.getTwitchClientId(), config);
-        String accessToken;
-        String twitchLogin;
-        try {
-            accessToken  = twitchAuth.getValidToken();
-            twitchLogin  = twitchAuth.getLoginFromToken(accessToken);
-            System.out.println("[Auth] Conectado como: " + twitchLogin);
-        } catch (Exception e) {
-            System.err.println("[Auth] Error de autenticación: " + e.getMessage());
-            System.err.println("[Auth] Conectando en modo anónimo...");
-            accessToken = null;
-            twitchLogin = null;
-        }
-
-        // EventSub para leer y manejar las recompensas
-        TwitchEventSub eventSub = accessToken != null
-                ? new TwitchEventSub(accessToken, config.getTwitchClientId(),
-                                    config.getTwitchChannelId(), queue)
-                : null;
-
-        if (eventSub != null) {
-            Thread eventSubThread = new Thread(eventSub, "twitch-eventsub");
-            eventSubThread.setDaemon(true);
-            eventSubThread.start();
-        }
-
-        // Lanzar interfaz
+        // Lanzar UI primero
         SwingUtilities.invokeLater(() -> {
             ChatOverlay overlay = new ChatOverlay(
-                    queue, config.getTwitchChannelId(),
-                    config.getTwitchClientId(), config.getTwitchClientSecret(),
-                    config, sharedImageCache);
-            if (eventSub != null) overlay.setEventSub(eventSub);
+                    queue,
+                    finalConfig.getTwitchChannelId(),
+                    finalConfig.getTwitchClientId(),
+                    finalConfig.getTwitchClientSecret(),
+                    finalConfig, sharedImageCache);
+
             overlay.setVisible(true);
             overlay.initNativeFeatures();
+            overlay.setIconImage(
+                        new ImageIcon("icon.png").getImage()
+                    );
+
+            // Mensaje de bienvenida siempre
+            overlay.appendSystemMessage(
+                "⚡ Chat Overlay iniciado. " +
+                (finalConfigOk
+                    ? "Intentando conectar con Twitch y YouTube..."
+                    : "⚠ No se encontró config.json o contiene errores. " +
+                    "Usa el botón ⚙ para configurar la aplicación y reinicia.")
+            );
+
+            // Iniciar conexiones en background
+            Thread.ofVirtual().start(() -> {
+                startConnections(finalConfig, queue, sharedImageCache,
+                                overlay, eventSubHolder);
+            });
         });
+    }
 
-        // Iniciar lectores
-        Thread twitchThread = new Thread(
-                            new TwitchChatReader(config.getTwitchChannel(), queue, accessToken, twitchLogin),
-                            "twitch-reader");
-        twitchThread.setDaemon(true);
-        twitchThread.start();
+    private static void startConnections(Config config,
+                                        BlockingQueue<ChatMessage> queue,
+                                        ImageCache sharedImageCache,
+                                        ChatOverlay overlay,
+                                        TwitchEventSub[] eventSubHolder) {
+        // OAuth Twitch
+        String accessToken  = null;
+        System.err.print("1");
+        String twitchLogin  = null;
 
-        Thread youtubeThread = new Thread(
-                new YouTubeChatReader(config.getYoutubeChannelId(),
-                                      config.getYoutubeVideoId(),
-                                      config.getYoutubeApiKeys(),
-                                      queue, config, sharedImageCache),
-                "youtube-reader");
-        youtubeThread.setDaemon(true);
-        youtubeThread.start();
+        try {
+            TwitchAuth auth = new TwitchAuth(config.getTwitchClientId(), config);
+            accessToken = auth.getValidToken();
+            twitchLogin = auth.getLoginFromToken(accessToken);
+            System.out.println("[Auth] Conectado como: " + twitchLogin);
+            final String login = twitchLogin;
+            SwingUtilities.invokeLater(() ->
+                overlay.appendSystemMessage("✔ Twitch OAuth OK — conectado como " + login));
+        } catch (Exception e) {
+            System.err.println("[Auth] Error OAuth: " + e.getMessage());
+            SwingUtilities.invokeLater(() ->
+                overlay.appendSystemMessage(
+                    "⚠ Twitch OAuth falló, conectando en modo anónimo. " +
+                    "Las recompensas y moderación no estarán disponibles."));
+        }
+
+        // Twitch IRC
+        final String finalToken = accessToken;
+        final String finalLogin = twitchLogin;
+        try {
+            Thread twitchThread = new Thread(
+                    new TwitchChatReader(config.getTwitchChannel(),
+                                        queue, finalToken, finalLogin),
+                    "twitch-reader");
+            twitchThread.setDaemon(true);
+            twitchThread.start();
+            SwingUtilities.invokeLater(() ->
+                overlay.appendSystemMessage("✔ Conectado al chat de Twitch."));
+        } catch (Exception e) {
+            System.err.println("[Main] Error iniciando Twitch: " + e.getMessage());
+            SwingUtilities.invokeLater(() ->
+                overlay.appendSystemMessage("✖ Error conectando con Twitch: "
+                        + e.getMessage()));
+        }
+
+        // EventSub
+        if (accessToken != null) {
+            try {
+                TwitchEventSub eventSub = new TwitchEventSub(
+                        accessToken, config.getTwitchClientId(),
+                        config.getTwitchChannelId(), queue);
+                eventSubHolder[0] = eventSub;
+
+                Thread eventSubThread = new Thread(eventSub, "twitch-eventsub");
+                eventSubThread.setDaemon(true);
+                eventSubThread.start();
+
+                SwingUtilities.invokeLater(() -> {
+                    overlay.setEventSub(eventSub);
+                    overlay.appendSystemMessage("✔ EventSub conectado. Recompensas activas.");
+                });
+            } catch (Exception e) {
+                System.err.println("[Main] Error EventSub: " + e.getMessage());
+                SwingUtilities.invokeLater(() ->
+                    overlay.appendSystemMessage("⚠ EventSub no disponible: "
+                            + e.getMessage()));
+            }
+        }
+
+        // YouTube
+        try {
+            Thread youtubeThread = new Thread(
+                    new YouTubeChatReader(config.getYoutubeChannelId(),
+                                        config.getYoutubeVideoId(),
+                                        config.getYoutubeApiKeys(),
+                                        queue, config, sharedImageCache),
+                    "youtube-reader");
+            youtubeThread.setDaemon(true);
+            youtubeThread.start();
+            SwingUtilities.invokeLater(() ->
+                overlay.appendSystemMessage("✔ Conectado al chat de YouTube."));
+        } catch (Exception e) {
+            System.err.println("[Main] Error YouTube: " + e.getMessage());
+            SwingUtilities.invokeLater(() ->
+                overlay.appendSystemMessage("⚠ YouTube no disponible: "
+                        + e.getMessage()));
+        }
     }
 }
