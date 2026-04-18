@@ -822,7 +822,7 @@ public class ChatOverlay extends JFrame {
 
     private void clearSingleMessage(String messageId) {
         System.err.println("[Chat] Intentando borrar messageId=" + messageId);
-System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
+        System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
         if (messageId == null || !messageOffsets.containsKey(messageId)) return;
         try {
             int[] offsets = messageOffsets.get(messageId);
@@ -890,6 +890,7 @@ System.err.println("[Chat] Offsets conocidos: " + messageOffsets.keySet());
         target.addMouseListener(dragAdapter);
         target.addMouseMotionListener(dragAdapter);
     }
+
     private ImageIcon loadIcon(String path, int size) {
         try {
             var url = getClass().getResource(path);

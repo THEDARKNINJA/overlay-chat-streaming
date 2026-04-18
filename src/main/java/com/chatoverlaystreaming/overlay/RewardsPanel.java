@@ -1,6 +1,9 @@
 package com.chatoverlaystreaming.overlay;
 
 import com.chatoverlaystreaming.readers.TwitchEventSub;
+
+import javafx.event.ActionEvent;
+
 import org.json.JSONObject;
 
 import javax.swing.*;
@@ -49,12 +52,22 @@ public class RewardsPanel extends JDialog {
     private JComboBox<String> displayCombo;
 
     // Campos solo para vídeo
+    private JTextField  videoTitleField;
     private JSpinner    videoWidthSpinner;
     private JSpinner    videoHeightSpinner;
     private JPanel      videoSizePanel;
+    private JPanel      videoPosRow;
+    private JSpinner    videoPosXSpinner;
+    private JSpinner    videoPosYSpinner;
     private JComboBox<Integer> fpsCombo;
+        // Chroma
+    private JCheckBox chromaCheck;
+    private JButton   chromaColorBtn;
+    private JLabel    chromaColorPreview;
+    private Color     chromaColor = new Color(0, 255, 0); // verde por defecto
+    private JSpinner  chromaToleranceSpinner;
+    private JPanel    chromaPanel;
     
-
     // Botones
     private JButton saveBtn;
     private JButton deleteBtn;
@@ -68,6 +81,18 @@ public class RewardsPanel extends JDialog {
         setBackground(BG);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setResizable(false);
+        // Cerrar con Escape
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke("ESCAPE"), "close");
+
+        getRootPane().getActionMap().put("close",
+            new AbstractAction() {
+                @Override
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    dispose();
+                }
+            }
+        );
 
         buildUI();
         pack();
@@ -100,6 +125,7 @@ public class RewardsPanel extends JDialog {
     }
 
     private void buildUI() {
+
         JPanel root = new JPanel(new BorderLayout(0, 8));
         root.setBackground(BG);
         root.setBorder(new EmptyBorder(12, 12, 12, 12));
@@ -209,109 +235,203 @@ public class RewardsPanel extends JDialog {
         styleCombo(typeCombo);
         addFormRow(form, gbc, row++, "Tipo:", typeCombo);
 
-// Path (con botón de explorador)
-JPanel pathPanel = new JPanel(new BorderLayout(4, 0));
-pathPanel.setBackground(BG);
-pathField = new JTextField(20);
-styleField(pathField);
-pathBrowseBtn = styledButton("📁", ACCENT);
-pathBrowseBtn.setPreferredSize(new Dimension(36, 26));
-pathBrowseBtn.addActionListener(e -> browsePath());
-pathPanel.add(pathField,      BorderLayout.CENTER);
-pathPanel.add(pathBrowseBtn,  BorderLayout.EAST);
-addFormRow(form, gbc, row++, "Carpeta:", pathPanel);
+        // Path (con botón de explorador)
+        JPanel pathPanel = new JPanel(new BorderLayout(4, 0));
+        pathPanel.setBackground(BG);
+        pathField = new JTextField(20);
+        styleField(pathField);
+        pathBrowseBtn = styledButton("📁", ACCENT);
+        pathBrowseBtn.setPreferredSize(new Dimension(36, 26));
+        pathBrowseBtn.addActionListener(e -> browsePath());
+        pathPanel.add(pathField,      BorderLayout.CENTER);
+        pathPanel.add(pathBrowseBtn,  BorderLayout.EAST);
+        addFormRow(form, gbc, row++, "Carpeta:", pathPanel);
 
-// Recursivo
-recursiveCheck = styledCheckBox("Buscar en subcarpetas");
-addFormRow(form, gbc, row++, "", recursiveCheck);
+        // Recursivo
+        recursiveCheck = styledCheckBox("Buscar en subcarpetas");
+        addFormRow(form, gbc, row++, "", recursiveCheck);
 
-// Modo de reproducción
-playModeCombo = new JComboBox<>(new String[]{
-    "random", "sequential", "random_no_repeat"});
-playModeCombo.setRenderer(new DefaultListCellRenderer() {
-    @Override
-    public Component getListCellRendererComponent(JList<?> list,
-            Object value, int index, boolean isSelected, boolean cellHasFocus) {
-        super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-        setBackground(isSelected ? ACCENT.darker() : BG2);
-        setForeground(FG);
-        setText(switch ((String) value) {
-            case "random"          -> "Aleatorio";
-            case "sequential"      -> "Secuencial";
-            case "random_no_repeat"-> "Aleatorio sin repetir";
-            default -> (String) value;
+        // Modo de reproducción
+        playModeCombo = new JComboBox<>(new String[]{
+            "random", "sequential", "random_no_repeat"});
+        playModeCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list,
+                    Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                setBackground(isSelected ? ACCENT.darker() : BG2);
+                setForeground(FG);
+                setText(switch ((String) value) {
+                    case "random"          -> "Aleatorio";
+                    case "sequential"      -> "Secuencial";
+                    case "random_no_repeat"-> "Aleatorio sin repetir";
+                    default -> (String) value;
+                });
+                return this;
+            }
         });
-        return this;
-    }
-});
-styleCombo(playModeCombo);
-addFormRow(form, gbc, row++, "Reproducción:", playModeCombo);
+        styleCombo(playModeCombo);
+        addFormRow(form, gbc, row++, "Reproducción:", playModeCombo);
 
-// Volumen
-JPanel volumePanel = new JPanel(new BorderLayout(6, 0));
-volumePanel.setBackground(BG);
-volumeSlider = new JSlider(0, 100, 100);
-volumeSlider.setBackground(BG);
-volumeSlider.setForeground(ACCENT);
-volumeLabel  = styledLabel("100%");
-volumeSlider.addChangeListener(e ->
-    volumeLabel.setText(volumeSlider.getValue() + "%"));
-volumePanel.add(volumeSlider, BorderLayout.CENTER);
-volumePanel.add(volumeLabel,  BorderLayout.EAST);
-addFormRow(form, gbc, row++, "Volumen:", volumePanel);
+        // Volumen
+        JPanel volumePanel = new JPanel(new BorderLayout(6, 0));
+        volumePanel.setBackground(BG);
+        volumeSlider = new JSlider(0, 100, 100);
+        volumeSlider.setBackground(BG);
+        volumeSlider.setForeground(ACCENT);
+        volumeLabel  = styledLabel("100%");
+        volumeSlider.addChangeListener(e ->
+            volumeLabel.setText(volumeSlider.getValue() + "%"));
+        volumePanel.add(volumeSlider, BorderLayout.CENTER);
+        volumePanel.add(volumeLabel,  BorderLayout.EAST);
+        addFormRow(form, gbc, row++, "Volumen:", volumePanel);
 
-// Tamaño vídeo (solo visible si tipo = video)
-videoSizePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-videoSizePanel.setBackground(BG);
-videoWidthSpinner  = new JSpinner(new SpinnerNumberModel(480, 160, 3840, 10));
-videoHeightSpinner = new JSpinner(new SpinnerNumberModel(270, 90,  2160, 10));
-styleSpinner(videoWidthSpinner);
-styleSpinner(videoHeightSpinner);
-videoWidthSpinner.setPreferredSize(new Dimension(80, 26));
-videoHeightSpinner.setPreferredSize(new Dimension(80, 26));
-videoSizePanel.add(styledLabel("Ancho:"));
-videoSizePanel.add(videoWidthSpinner);
-videoSizePanel.add(styledLabel("  Alto:"));
-videoSizePanel.add(videoHeightSpinner);
-addFormRow(form, gbc, row++, "Tamaño vídeo:", videoSizePanel);
-fpsCombo = new JComboBox<>(new Integer[]{30, 60});
-styleCombo(fpsCombo);
-fpsCombo.setSelectedItem(30);
-addFormRow(form, gbc, row++, "FPS captura:", fpsCombo);
+        // Tamaño vídeo (solo visible si tipo = video)
+        videoSizePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        videoSizePanel.setBackground(BG);
+        videoWidthSpinner  = new JSpinner(new SpinnerNumberModel(480, 160, 3840, 10));
+        videoHeightSpinner = new JSpinner(new SpinnerNumberModel(270, 90,  2160, 10));
+        styleSpinner(videoWidthSpinner);
+        styleSpinner(videoHeightSpinner);
+        videoWidthSpinner.setPreferredSize(new Dimension(80, 26));
+        videoHeightSpinner.setPreferredSize(new Dimension(80, 26));
+        videoSizePanel.add(styledLabel("Ancho:"));
+        videoSizePanel.add(videoWidthSpinner);
+        videoSizePanel.add(styledLabel("  Alto:"));
+        videoSizePanel.add(videoHeightSpinner);
+        addFormRow(form, gbc, row++, "Tamaño vídeo:", videoSizePanel);
 
-// Pantalla de reproducción
-displayCombo = new JComboBox<>();
-styleCombo(displayCombo);
+        // BLOQUE POSICION DEL PANEL DE VIDEO
+        // Panel de posición
+        JPanel videoPosPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        videoPosPanel.setBackground(BG);
+        videoPosXSpinner = new JSpinner(new SpinnerNumberModel(0, -9999, 9999, 10));
+        videoPosYSpinner = new JSpinner(new SpinnerNumberModel(0, -9999, 9999, 10));
+        styleSpinner(videoPosXSpinner);
+        styleSpinner(videoPosYSpinner);
+        videoPosXSpinner.setPreferredSize(new Dimension(80, 26));
+        videoPosYSpinner.setPreferredSize(new Dimension(80, 26));
+        videoPosPanel.add(styledLabel("X:"));
+        videoPosPanel.add(videoPosXSpinner);
+        videoPosPanel.add(styledLabel("  Y:"));
+        videoPosPanel.add(videoPosYSpinner);
 
-// Poblar con las pantallas disponibles
-GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-GraphicsDevice[] screens = ge.getScreenDevices();
-displayCombo.addItem("Pantalla principal (visible en OBS por captura de ventana)");
-for (int i = 1; i < screens.length; i++) {
-    DisplayMode dm = screens[i].getDisplayMode();
-    displayCombo.addItem("Pantalla " + (i + 1) + 
-            " (" + dm.getWidth() + "x" + dm.getHeight() + ")");
-}
+        // Hint de resolución que se actualiza al cambiar la pantalla
+        JLabel resHint = styledLabel("");
+        resHint.setForeground(new Color(140, 140, 150));
+        resHint.setFont(FONT.deriveFont(11f));
 
-// Solo visible para vídeo
-JPanel displayPanel = new JPanel(new BorderLayout());
-displayPanel.setBackground(BG);
-displayPanel.add(displayCombo);
-addFormRow(form, gbc, row++, "Reproducir en:", displayPanel);
+        // Actualizar hint y límites cuando cambia la pantalla o el tamaño
+        Runnable updateLimits = () -> {
+            int screenIdx = displayCombo.getSelectedIndex();
+            GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+            GraphicsDevice[] screens = ge.getScreenDevices();
+            int targetIdx = (screenIdx > 0 && screenIdx < screens.length)
+                    ? screenIdx : 0;
+            Rectangle bounds = screens[targetIdx]
+                    .getDefaultConfiguration().getBounds();
+            int maxX = bounds.width  - (int) videoWidthSpinner.getValue();
+            int maxY = bounds.height - (int) videoHeightSpinner.getValue();
+            ((SpinnerNumberModel) videoPosXSpinner.getModel()).setMaximum(maxX);
+            ((SpinnerNumberModel) videoPosYSpinner.getModel()).setMaximum(maxY);
+            resHint.setText("  Pantalla: " + bounds.width + "x" + bounds.height);
+        };
+
+        displayCombo.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) updateLimits.run();
+        });
+        videoWidthSpinner.addChangeListener(e  -> updateLimits.run());
+        videoHeightSpinner.addChangeListener(e -> updateLimits.run());
+
+        videoPosRow = new JPanel(new BorderLayout(4, 0));
+        videoPosRow.setBackground(BG);
+        videoPosRow.add(videoPosPanel, BorderLayout.WEST);
+        videoPosRow.add(resHint,       BorderLayout.CENTER);
+        addFormRow(form, gbc, row++, "Posición:", videoPosRow);
+        // CIERRE BLOQUE POSICION DEL PANEL DE VIDEO
+
+        //Título de la ventana del panel de vídeo
+        videoTitleField = new JTextField(24);
+        styleField(videoTitleField);
+        addFormRow(form, gbc, row++, "Título ventana:", videoTitleField);
+
+        //Selección FPS del vídeo
+        fpsCombo = new JComboBox<>(new Integer[]{30, 60});
+        styleCombo(fpsCombo);
+        fpsCombo.setSelectedItem(30);
+        addFormRow(form, gbc, row++, "FPS captura:", fpsCombo);
+
+        chromaPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        chromaPanel.setBackground(BG);
+        chromaCheck = styledCheckBox("Activar croma");
+        chromaColorPreview = new JLabel("  ");
+        chromaColorPreview.setOpaque(true);
+        chromaColorPreview.setBackground(chromaColor);
+        chromaColorPreview.setBorder(BorderFactory.createLineBorder(
+                new Color(60, 60, 70)));
+        chromaColorPreview.setPreferredSize(new Dimension(24, 18));
+        chromaColorBtn = styledButton("Color croma", new Color(100, 200, 100));
+        chromaColorBtn.addActionListener(e -> {
+            Color chosen = JColorChooser.showDialog(
+                    RewardsPanel.this, "Color de croma", chromaColor);
+            if (chosen != null) {
+                chromaColor = chosen;
+                chromaColorPreview.setBackground(chromaColor);
+            }
+        });
+        chromaToleranceSpinner = new JSpinner(
+                new SpinnerNumberModel(40, 0, 255, 5));
+        styleSpinner(chromaToleranceSpinner);
+        chromaToleranceSpinner.setPreferredSize(new Dimension(60, 26));
+
+        chromaPanel.add(chromaCheck);
+        chromaPanel.add(chromaColorPreview);
+        chromaPanel.add(chromaColorBtn);
+        chromaPanel.add(styledLabel("  Tolerancia:"));
+        chromaPanel.add(chromaToleranceSpinner);
+        addFormRow(form, gbc, row++, "Fondo croma:", chromaPanel);
+
+        // Pantalla de reproducción
+        displayCombo = new JComboBox<>();
+        styleCombo(displayCombo);
+
+        // Poblar con las pantallas disponibles
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        GraphicsDevice[] screens = ge.getScreenDevices();
+        displayCombo.addItem("Pantalla principal (visible en OBS por captura de ventana)");
+        for (int i = 1; i < screens.length; i++) {
+            DisplayMode dm = screens[i].getDisplayMode();
+            displayCombo.addItem("Pantalla " + (i + 1) + 
+                    " (" + dm.getWidth() + "x" + dm.getHeight() + ")");
+        }
+
+        // Solo visible para vídeo
+        JPanel displayPanel = new JPanel(new BorderLayout());
+        displayPanel.setBackground(BG);
+        displayPanel.add(displayCombo);
+        addFormRow(form, gbc, row++, "Reproducir en:", displayPanel);
 
 
 
-// Mostrar/ocultar tamaño según tipo seleccionado
-typeCombo.addItemListener(e -> {
-    if (e.getStateChange() == ItemEvent.SELECTED) {
-        boolean isVideo = "video".equals(typeCombo.getSelectedItem());
-        videoSizePanel.setVisible(isVideo);
-        displayPanel.setVisible(isVideo);
-        pack();
-    }
-});
-videoSizePanel.setVisible(false); // oculto por defecto
-displayPanel.setVisible(false);
+        // Mostrar/ocultar tamaño según tipo seleccionado
+        typeCombo.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                boolean isVideo = "video".equals(typeCombo.getSelectedItem());
+                videoSizePanel.setVisible(isVideo);
+                videoPosRow.setVisible(isVideo);
+                displayPanel.setVisible(isVideo);
+                videoTitleField.setVisible(isVideo);
+                fpsCombo.setVisible(isVideo);
+                chromaPanel.setVisible(isVideo);
+                pack();
+            }
+        });
+        videoSizePanel.setVisible(false); // oculto por defecto
+        videoPosRow.setVisible(false);
+        displayPanel.setVisible(false);
+        videoTitleField.setVisible(false);
+        fpsCombo.setVisible(false);
+        chromaPanel.setVisible(false);
 
         // Carpeta
         /*
@@ -362,7 +482,7 @@ displayPanel.setVisible(false);
                     System.out.println("[RewardsPanel] Lista cargada: " + rewardsList.size() + " recompensas");
                 } catch (Exception e) {
                     System.err.println("[RewardsPanel] Error cargando: " + e.getMessage());
-                    JOptionPane.showMessageDialog(RewardsPanel.this,
+                    ObsAwareDialog.showMessage(RewardsPanel.this,
                             "No se pudieron cargar las recompensas:\n" + e.getMessage(),
                             "Error", JOptionPane.ERROR_MESSAGE);
                 }
@@ -418,10 +538,28 @@ displayPanel.setVisible(false);
             if ("video".equals(type)) {
                 videoWidthSpinner.setValue(rewardConfig.optInt("width", 480));
                 videoHeightSpinner.setValue(rewardConfig.optInt("height", 270));
+                videoTitleField.setText(rewardConfig.optString("windowTitle", "OverlayVideo"));
+                videoPosXSpinner.setValue(rewardConfig.optInt("posX", 0));
+                videoPosYSpinner.setValue(rewardConfig.optInt("posY", 0));
                 fpsCombo.setSelectedItem(rewardConfig.optInt("fps", 60));
+
+                boolean hasChroma = rewardConfig.optBoolean("chromaEnabled", false);
+                chromaCheck.setSelected(hasChroma);
+                int chromaRgb = rewardConfig.optInt("chromaColor", 0x00FF00);
+                chromaColor = new Color(chromaRgb);
+                chromaColorPreview.setBackground(chromaColor);
+                chromaToleranceSpinner.setValue(rewardConfig.optInt("chromaTolerance", 40));
+
                 videoSizePanel.setVisible(true);
+                videoPosRow.setVisible(true);
+                videoTitleField.setVisible(true);
+                fpsCombo.setVisible(true);
+                chromaPanel.setVisible(true);
             } else {
                 videoSizePanel.setVisible(false);
+                videoTitleField.setVisible(false);
+                fpsCombo.setVisible(false);
+                chromaPanel.setVisible(false);
             }
             int displayIndex = rewardConfig.optInt("displayIndex", 0);
             if (displayIndex < displayCombo.getItemCount()) {
@@ -453,7 +591,16 @@ displayPanel.setVisible(false);
         videoWidthSpinner.setValue(480);
         videoHeightSpinner.setValue(270);
         videoSizePanel.setVisible(false);
+        videoPosRow.setVisible(false);
+        videoPosXSpinner.setValue(0);
+        videoPosYSpinner.setValue(0);
+        chromaPanel.setVisible(false);
+        videoTitleField.setText("OverlayVideo");
         fpsCombo.setSelectedItem(60);
+        chromaCheck.setSelected(false);
+        chromaColor = new Color(0, 255, 0);
+        chromaColorPreview.setBackground(chromaColor);
+        chromaToleranceSpinner.setValue(40);
         displayCombo.setSelectedIndex(0);
     }
 
@@ -496,12 +643,12 @@ displayPanel.setVisible(false);
         int displayIndex = displayCombo.getSelectedIndex();
 
         if (title.isBlank()) {
-            JOptionPane.showMessageDialog(this, "El título no puede estar vacío.",
+            ObsAwareDialog.showMessage(this, "El título no puede estar vacío.",
                     "Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
         if (path.isBlank()) {
-            JOptionPane.showMessageDialog(this, "La carpeta no puede estar vacía.",
+            ObsAwareDialog.showMessage(this, "La carpeta no puede estar vacía.",
                     "Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -544,18 +691,25 @@ displayPanel.setVisible(false);
                         rewardConfig.put("width",  vidWidth);
                         rewardConfig.put("height", vidHeight);
                         rewardConfig.put("displayIndex", displayIndex);
+                        rewardConfig.put("posX", videoPosXSpinner.getValue());
+                        rewardConfig.put("posY", videoPosYSpinner.getValue());
                         rewardConfig.put("fps", fpsCombo.getSelectedItem());
+                        String windowTitle = videoTitleField.getText().trim();
+                        rewardConfig.put("windowTitle", windowTitle.isBlank() ? "OverlayVideo" : windowTitle);
+                        rewardConfig.put("chromaEnabled",   chromaCheck.isSelected());
+                        rewardConfig.put("chromaColor",     chromaColor.getRGB() & 0xFFFFFF);
+                        rewardConfig.put("chromaTolerance", chromaToleranceSpinner.getValue());
                     }
 
                     config.saveTwitchReward(rewardId, rewardConfig);
                     System.out.println("[RewardsPanel] Guardado OK: " + rewardId);
-                    JOptionPane.showMessageDialog(RewardsPanel.this,
+                    ObsAwareDialog.showMessage(RewardsPanel.this,
                             "Recompensa guardada correctamente.",
                             "OK", JOptionPane.INFORMATION_MESSAGE);
                     loadRewards();
                 } catch (Exception e) {
                     System.err.println("[RewardsPanel] Error: " + e.getMessage());
-                    JOptionPane.showMessageDialog(RewardsPanel.this,
+                    ObsAwareDialog.showMessage(RewardsPanel.this,
                             "Error guardando:\n" + e.getMessage(),
                             "Error", JOptionPane.ERROR_MESSAGE);
                 } finally {
@@ -575,9 +729,9 @@ displayPanel.setVisible(false);
         String rewardId   = reward.getString("id");
         String title      = reward.getString("title");
 
-        int confirm = JOptionPane.showConfirmDialog(this,
+        int confirm = ObsAwareDialog.showConfirm(this,
                 "¿Borrar la recompensa \"" + title + "\"?\nEsta acción no se puede deshacer.",
-                "Confirmar borrado", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                "Confirmar borrado", JOptionPane.YES_NO_OPTION);
 
         if (confirm != JOptionPane.YES_OPTION) return;
 
@@ -598,7 +752,7 @@ displayPanel.setVisible(false);
                     loadRewards();
                     clearForm();
                 } catch (Exception e) {
-                    JOptionPane.showMessageDialog(RewardsPanel.this,
+                    ObsAwareDialog.showMessage(RewardsPanel.this,
                             "Error borrando recompensa:\n" + e.getMessage(),
                             "Error", JOptionPane.ERROR_MESSAGE);
                 } finally {

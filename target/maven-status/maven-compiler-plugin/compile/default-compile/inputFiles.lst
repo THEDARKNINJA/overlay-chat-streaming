@@ -12,10 +12,14 @@ E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\model\EmoteToke
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\ChatOverlay.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\Config.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\ConfigPanel.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\ObsAwareDialog.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\RewardMediaPlayer.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\RewardsPanel.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\TwitchAuth.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\VideoOverlay.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\VideoPlayerWindow.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\VlcjDetector.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\VlcjVideoOverlay.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\WindowClickThrough.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\overlay\WrapEditorKitPro.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\readers\TwitchChatReader.java

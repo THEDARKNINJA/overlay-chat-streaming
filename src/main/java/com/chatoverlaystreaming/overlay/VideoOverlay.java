@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 // VideoOverlay, versión GDI
 
-public class VideoOverlay extends JFrame {
+public class VideoOverlay extends JFrame implements VideoPlayerWindow {
 
     private int WIDTH;
     private int HEIGHT;
@@ -51,7 +51,7 @@ public class VideoOverlay extends JFrame {
          */
 
     public VideoOverlay(Path videoFile, double volume,
-                        int width, int height, int displayIndex, int fps) {
+                        int width, int height, int displayIndex, int fps, String windowTitle, int posX, int posY) {
         this.videoFile    = videoFile;
         this.volume       = volume;
         this.WIDTH        = width;
@@ -62,33 +62,58 @@ public class VideoOverlay extends JFrame {
         setUndecorated(true);
         setAlwaysOnTop(true);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        setTitle("OverlayVideo");
+        setTitle(windowTitle != null && !windowTitle.isBlank()
+            ? windowTitle : "OverlayVideo");
         setSize(width, height);
-        setBackground(java.awt.Color.BLACK);
-        setIconImage( new ImageIcon("icon.png").getImage() );
 
-        positionOnScreen();
+        //setBackground(java.awt.Color.BLACK);
+setBackground(new java.awt.Color(0, 0, 0, 0));
+getRootPane().setOpaque(false);
+((JComponent) getContentPane()).setOpaque(false);
+
+        setIconImage( new ImageIcon("icon.png").getImage() );
+        positionOnScreen(posX, posY);
+        setFocusableWindowState(false);
+        setAutoRequestFocus(false);
 
         videoPanel = new VideoPanel(width, height);
         add(videoPanel, BorderLayout.CENTER);
     }
 
-    private void positionOnScreen() {
+    private void positionOnScreen(int posX, int posY) {
         GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
         GraphicsDevice[] screens = ge.getScreenDevices();
 
-        if (displayIndex > 0 && displayIndex < screens.length) {
-            Rectangle bounds = screens[displayIndex]
-                    .getDefaultConfiguration().getBounds();
-            setLocation(
-                bounds.x + (bounds.width  - WIDTH)  / 2,
-                bounds.y + (bounds.height - HEIGHT) / 2
-            );
-        } else {
-            setLocation(0, 0);
+        // Si el índice elegido no existe, usar la pantalla principal
+        int targetIndex = (displayIndex > 0 && displayIndex < screens.length)
+                ? displayIndex : 0;
+
+        if (targetIndex != displayIndex) {
+            System.out.println("[Video] Pantalla " + (displayIndex + 1)
+                    + " no disponible, usando pantalla principal.");
         }
+
+        Rectangle bounds = screens[targetIndex]
+                .getDefaultConfiguration().getBounds();
+
+        // Posición relativa a la pantalla elegida
+        int absX = bounds.x + posX;
+        int absY = bounds.y + posY;
+
+        // Asegurarse de que no se sale de la pantalla
+        absX = Math.max(bounds.x,
+            Math.min(absX, bounds.x + bounds.width  - WIDTH));
+        absY = Math.max(bounds.y,
+            Math.min(absY, bounds.y + bounds.height - HEIGHT));
+
+        if (absX != bounds.x + posX || absY != bounds.y + posY) {
+            System.out.println("[Video] Posición ajustada para no salirse de pantalla.");
+        }
+
+        setLocation(absX, absY);
     }
 
+    @Override
     public void play() {
         Platform.runLater(() -> {
             try {
@@ -203,6 +228,11 @@ public class VideoOverlay extends JFrame {
         }
         super.dispose();
     }
+    
+    @Override
+    public void setChroma(boolean enabled, java.awt.Color color, int tolerance) {
+        videoPanel.setChroma(enabled, color, tolerance);
+    }
 
     // ── Panel que pinta los frames ───────────────────────────────────────────
 
@@ -213,16 +243,23 @@ public class VideoOverlay extends JFrame {
         private final int width;
         private final int height;
 
+        private volatile boolean chromaEnabled   = false;
+        private volatile int     chromaR, chromaG, chromaB;
+        private volatile int     chromaTolerance = 40;
+
         VideoPanel(int width, int height) {
             this.width  = width;
             this.height = height;
-            setBackground(java.awt.Color.BLACK);
+            setOpaque(false);
+            setBackground(new java.awt.Color(0, 0, 0, 0));
             setPreferredSize(new Dimension(width, height));
         }
 
         void setFrame(BufferedImage frame) {
+            if (chromaEnabled && frame != null) {
+                frame = applyChroma(frame);
+            }
             currentFrame.set(frame);
-            // repaint en el EDT
             SwingUtilities.invokeLater(this::repaint);
         }
 
@@ -242,11 +279,53 @@ public class VideoOverlay extends JFrame {
                 g.drawImage(frame, drawX, drawY, drawW, drawH, null);
             }
         }
+
+        public void setChroma(boolean enabled, java.awt.Color color, int tolerance) {
+            this.chromaEnabled   = enabled;
+            this.chromaR         = color.getRed();
+            this.chromaG         = color.getGreen();
+            this.chromaB         = color.getBlue();
+            this.chromaTolerance = tolerance;
+        }
+
+        private BufferedImage applyChroma(BufferedImage src) {
+            // Convertir a ARGB para poder poner píxeles transparentes
+            BufferedImage result = new BufferedImage(
+                    src.getWidth(), src.getHeight(),
+                    BufferedImage.TYPE_INT_ARGB);
+
+            int[] pixels = src.getRGB(0, 0,
+                    src.getWidth(), src.getHeight(), null, 0, src.getWidth());
+
+            for (int i = 0; i < pixels.length; i++) {
+                int pixel = pixels[i];
+                int r = (pixel >> 16) & 0xFF;
+                int g = (pixel >>  8) & 0xFF;
+                int b =  pixel        & 0xFF;
+
+                // Distancia euclídea al color croma
+                double dist = Math.sqrt(
+                        Math.pow(r - chromaR, 2) +
+                        Math.pow(g - chromaG, 2) +
+                        Math.pow(b - chromaB, 2));
+
+                if (dist <= chromaTolerance) {
+                    pixels[i] = 0x00000000; // transparente
+                }
+            }
+
+            result.setRGB(0, 0, src.getWidth(), src.getHeight(),
+                    pixels, 0, src.getWidth());
+            return result;
+        }
     }
+    
+    @Override
     public void setOnReady(Runnable callback) {
         this.onReadyCallback = callback;
     }
 
+    @Override
     public void setOnError(java.util.function.Consumer<String> callback) {
         this.onErrorCallback = callback;
     }

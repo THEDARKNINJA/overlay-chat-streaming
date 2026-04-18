@@ -3,6 +3,7 @@ package com.chatoverlaystreaming.overlay;
 import javafx.application.Platform;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
+import javafx.scene.paint.Color;
 import javafx.embed.swing.JFXPanel;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.WritableImage;
@@ -39,15 +40,22 @@ public class RewardMediaPlayer {
     }
 
     public static void play(String rewardId, JSONObject rewardConfig) {
-        String type       = rewardConfig.optString("type", "audio");
-        String path       = rewardConfig.optString("path", "");
-        boolean recursive = rewardConfig.optBoolean("recursive", false);
-        String playMode   = rewardConfig.optString("playMode", "random");
-        double volume     = rewardConfig.optDouble("volume", 1.0);
-        int width         = rewardConfig.optInt("width", 480);
-        int height        = rewardConfig.optInt("height", 270);
-        int displayIndex  = rewardConfig.optInt("displayIndex", 0);
-        int fps           = rewardConfig.optInt("fps", 30);
+        String type        = rewardConfig.optString("type", "audio");
+        String path        = rewardConfig.optString("path", "");
+        boolean recursive  = rewardConfig.optBoolean("recursive", false);
+        String playMode    = rewardConfig.optString("playMode", "random");
+        double volume      = rewardConfig.optDouble("volume", 1.0);
+        int width          = rewardConfig.optInt("width", 480);
+        int height         = rewardConfig.optInt("height", 270);
+        int displayIndex   = rewardConfig.optInt("displayIndex", 0);
+        int fps            = rewardConfig.optInt("fps", 30);
+        String windowTitle = rewardConfig.optString("windowTitle", "VideoOverlay");
+        boolean chromaEnabled   = rewardConfig.optBoolean("chromaEnabled", false);
+        int     chromaColorRgb  = rewardConfig.optInt("chromaColor", 0x00FF00);
+        int     chromaTolerance = rewardConfig.optInt("chromaTolerance", 40);
+        java.awt.Color chromaColor     = new java.awt.Color(chromaColorRgb);
+        int vidPosX        = rewardConfig.optInt("posX", 0);
+        int vidPosY        = rewardConfig.optInt("posY", 0);
 
         if (path.isBlank()) {
             System.err.println("[Media] Path vacío para recompensa: " + rewardId);
@@ -71,7 +79,8 @@ public class RewardMediaPlayer {
 
             // Intentar reproducir excluyendo los fallidos
             playWithFallback(rewardId, allFiles, playMode, type,
-                             volume, width, height, displayIndex, fps);
+                             volume, width, height, displayIndex, fps, windowTitle,
+                            chromaEnabled, chromaColor, chromaTolerance, vidPosX, vidPosY);
 
         } catch (Exception e) {
             System.err.println("[Media] Error listando archivos: " + e.getMessage());
@@ -88,7 +97,8 @@ public class RewardMediaPlayer {
                                           String type,
                                           double volume,
                                           int width, int height,
-                                          int displayIndex, int fps) {
+                                          int displayIndex, int fps, String windowTitle,
+                                          boolean chromaEnabled, java.awt.Color chromaColor, int chromaTolerance, int vidPosX, int vidPosY) {
         Set<Path> failed = failedFiles.computeIfAbsent(
                 rewardId, k -> ConcurrentHashMap.newKeySet());
 
@@ -129,10 +139,11 @@ public class RewardMediaPlayer {
         if ("audio".equals(type)) {
             playAudioWithFallback(chosen, volume,
                     rewardId, allFiles, playMode, type,
-                    volume, width, height, displayIndex, fps);
+                    volume, width, height, displayIndex, fps, windowTitle);
         } else {
             playVideoWithFallback(chosen, volume, width, height, displayIndex, fps,
-                    rewardId, allFiles, playMode, type);
+                    rewardId, allFiles, playMode, type, windowTitle,
+                    chromaEnabled, chromaColor, chromaTolerance, vidPosX, vidPosY);
         }
     }
 
@@ -142,7 +153,7 @@ public class RewardMediaPlayer {
                                                String playMode, String type,
                                                double vol,
                                                int width, int height,
-                                               int displayIndex, int fps) {
+                                               int displayIndex, int fps, String windowTitle) {
         Platform.runLater(() -> {
             try {
                 Media media        = new Media(file.toUri().toString());
@@ -177,7 +188,8 @@ public class RewardMediaPlayer {
                     new Thread(() -> {
                         try { Thread.sleep(200); } catch (InterruptedException ignored) {}
                         playWithFallback(rewardId, allFiles, playMode, type,
-                                vol, width, height, displayIndex, fps);
+                                vol, width, height, displayIndex, fps, windowTitle,
+                                false, null, 0, 0, 0);
                     }, "media-retry").start();
                 });
 
@@ -191,7 +203,8 @@ public class RewardMediaPlayer {
                 new Thread(() -> {
                     try { Thread.sleep(200); } catch (InterruptedException ignored) {}
                     playWithFallback(rewardId, allFiles, playMode, type,
-                            vol, width, height, displayIndex, fps);
+                            vol, width, height, displayIndex, fps, windowTitle,
+                            false, null, 0, 0, 0);
                 }, "media-retry").start();
             }
         });
@@ -202,12 +215,25 @@ public class RewardMediaPlayer {
                                                int displayIndex, int fps,
                                                String rewardId,
                                                List<Path> allFiles,
-                                               String playMode, String type) {
-                                                
-	    ensureFX();
+                                               String playMode, String type, String windowTitle,
+                                               boolean chromaEnabled, java.awt.Color chromaColor, int chromaTolerance, 
+                                               int vidPosX, int vidPosY) {
+                         
         SwingUtilities.invokeLater(() -> {
-            VideoOverlay overlay = new VideoOverlay(
-                    file, volume, width, height, displayIndex, fps);
+            VideoPlayerWindow overlay;
+
+            if (VlcjDetector.isAvailable()) {
+                overlay = new VlcjVideoOverlay(file, volume, width, height,
+                                                displayIndex, fps, windowTitle, vidPosX, vidPosY);
+            } else {                       
+	            ensureFX();
+                overlay = new VideoOverlay(file, volume, width, height,
+                                            displayIndex, fps, windowTitle, vidPosX, vidPosY);
+            }
+
+            if (chromaEnabled) {
+                overlay.setChroma(true, chromaColor, chromaTolerance);
+            }
 
             // Callback que VideoOverlay llama si hay error de reproducción
             overlay.setOnError(errorMsg -> {
@@ -220,7 +246,8 @@ public class RewardMediaPlayer {
                 new Thread(() -> {
                     try { Thread.sleep(200); } catch (InterruptedException ignored) {}
                     playWithFallback(rewardId, allFiles, playMode, type,
-                            volume, width, height, displayIndex, fps);
+                            volume, width, height, displayIndex, fps, windowTitle,
+                            chromaEnabled, chromaColor, chromaTolerance, vidPosX, vidPosY);
                 }, "media-retry").start();
             });
 

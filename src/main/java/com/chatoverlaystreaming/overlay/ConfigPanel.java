@@ -51,6 +51,18 @@ public class ConfigPanel extends JDialog {
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setResizable(true);
         getContentPane().setBackground(BG);
+        // Cerrar con Escape
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke("ESCAPE"), "close");
+
+        getRootPane().getActionMap().put("close",
+            new AbstractAction() {
+                @Override
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    dispose();
+                }
+            }
+        );
 
         buildUI();
         loadValues();
@@ -86,6 +98,7 @@ public class ConfigPanel extends JDialog {
     }
 
     private void buildUI() {
+        
         JPanel root = new JPanel();
         root.setLayout(new BoxLayout(root, BoxLayout.Y_AXIS));
         root.setBackground(BG);
@@ -292,12 +305,11 @@ public class ConfigPanel extends JDialog {
                 minPoll, showViewers, canClick, loadBTTV, msgTimeout, logActivity
             );
 
-            int confirm = JOptionPane.showConfirmDialog(this,
+            int confirm = ObsAwareDialog.showConfirm(this,
                     "Configuración guardada.\n" +
                     "Es necesario reiniciar la aplicación para aplicar los cambios.\n\n" +
                     "¿Reiniciar ahora?",
-                    "Guardado", JOptionPane.YES_NO_OPTION,
-                    JOptionPane.INFORMATION_MESSAGE);
+                    "Guardado", JOptionPane.YES_NO_OPTION);
 
             if (confirm == JOptionPane.YES_OPTION) {
                 restartApplication();
@@ -344,7 +356,7 @@ public class ConfigPanel extends JDialog {
     }
 
     private void showError(String msg) {
-        JOptionPane.showMessageDialog(this, msg, "Error",
+        ObsAwareDialog.showMessage(this, msg, "Error",
                 JOptionPane.ERROR_MESSAGE);
     }
 
