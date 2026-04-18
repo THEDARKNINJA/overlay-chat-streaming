@@ -73,109 +73,163 @@ public class Main {
                         new ImageIcon("icon.png").getImage()
                     );
 
-            // Mensaje de bienvenida siempre
-            overlay.appendSystemMessage(
-                "⚡ Chat Overlay iniciado. " +
-                (finalConfigOk
-                    ? "Intentando conectar con Twitch y YouTube..."
-                    : "⚠ No se encontró config.json o contiene errores. " +
-                    "Usa el botón ⚙ para configurar la aplicación y reinicia.")
-            );
+            boolean twitchWasOk  = finalConfig.getLastConnectionSuccess("twitch");
+            boolean youtubeWasOk = finalConfig.getLastConnectionSuccess("youtube");
 
-            // Iniciar conexiones en background
-            Thread.ofVirtual().start(() -> {
-                startConnections(finalConfig, queue, sharedImageCache,
+            // Configurar los botones de reconexión manual
+            overlay.setTwitchConnectAction(() ->
+                connectTwitch(finalConfig, queue, sharedImageCache,
+                            overlay, eventSubHolder));
+
+            overlay.setYoutubeConnectAction(() ->
+                connectYoutube(finalConfig, queue, sharedImageCache, overlay));
+
+            if (!twitchWasOk && !youtubeWasOk) {
+                // Primera vez o ambas fallaron — mostrar botones y mensaje
+                overlay.showTwitchButton();
+                overlay.showYoutubeButton();
+                overlay.appendSystemMessage(
+                    "⚙ Primera conexión o conexión previa fallida. " +
+                    "Configura tus datos con el botón ⚙ y pulsa los " +
+                    "botones de Twitch y YouTube para conectar.");
+            } else {
+                // Al menos una fue exitosa — intentar reconectar automáticamente
+                overlay.appendSystemMessage("⚡ Intentando reconectar...");
+
+                if (twitchWasOk) {
+                    connectTwitch(finalConfig, queue, sharedImageCache,
                                 overlay, eventSubHolder);
-            });
+                } else {
+                    overlay.showTwitchButton();
+                    overlay.appendSystemMessage(
+                        "⚠ La última conexión de Twitch falló. " +
+                        "Pulsa el botón de Twitch para reintentar.");
+                }
+
+                if (youtubeWasOk) {
+                    connectYoutube(finalConfig, queue, sharedImageCache, overlay);
+                } else {
+                    overlay.showYoutubeButton();
+                    overlay.appendSystemMessage(
+                        "⚠ La última conexión de YouTube falló. " +
+                        "Pulsa el botón de YouTube para reintentar.");
+                }
+            }
         });
     }
 
-    private static void startConnections(Config config,
-                                        BlockingQueue<ChatMessage> queue,
-                                        ImageCache sharedImageCache,
-                                        ChatOverlay overlay,
-                                        TwitchEventSub[] eventSubHolder) {
-        // OAuth Twitch
-        String accessToken  = null;
-        System.err.print("1");
-        String twitchLogin  = null;
-
-        try {
-            TwitchAuth auth = new TwitchAuth(config.getTwitchClientId(), config);
-            accessToken = auth.getValidToken();
-            twitchLogin = auth.getLoginFromToken(accessToken);
-            System.out.println("[Auth] Conectado como: " + twitchLogin);
-            final String login = twitchLogin;
-            SwingUtilities.invokeLater(() ->
-                overlay.appendSystemMessage("✔ Twitch OAuth OK — conectado como " + login));
-        } catch (Exception e) {
-            System.err.println("[Auth] Error OAuth: " + e.getMessage());
-            SwingUtilities.invokeLater(() ->
-                overlay.appendSystemMessage(
-                    "⚠ Twitch OAuth falló, conectando en modo anónimo. " +
-                    "Las recompensas y moderación no estarán disponibles."));
-        }
-
-        // Twitch IRC
-        final String finalToken = accessToken;
-        final String finalLogin = twitchLogin;
-        try {
-            Thread twitchThread = new Thread(
-                    new TwitchChatReader(config.getTwitchChannel(),
-                                        queue, finalToken, finalLogin),
-                    "twitch-reader");
-            twitchThread.setDaemon(true);
-            twitchThread.start();
-            SwingUtilities.invokeLater(() ->
-                overlay.appendSystemMessage("✔ Conectado al chat de Twitch."));
-        } catch (Exception e) {
-            System.err.println("[Main] Error iniciando Twitch: " + e.getMessage());
-            SwingUtilities.invokeLater(() ->
-                overlay.appendSystemMessage("✖ Error conectando con Twitch: "
-                        + e.getMessage()));
-        }
-
-        // EventSub
-        if (accessToken != null) {
+    private static void connectTwitch(Config config,
+                                    BlockingQueue<ChatMessage> queue,
+                                    ImageCache sharedImageCache,
+                                    ChatOverlay overlay,
+                                    TwitchEventSub[] eventSubHolder) {
+        Thread.ofVirtual().name("twitch-connect").start(() -> {
+            // OAuth
+            String accessToken = null;
+            String twitchLogin = null;
             try {
-                TwitchEventSub eventSub = new TwitchEventSub(
-                        accessToken, config.getTwitchClientId(),
-                        config.getTwitchChannelId(), queue);
-                eventSubHolder[0] = eventSub;
+                TwitchAuth auth = new TwitchAuth(
+                        config.getTwitchClientId(), config);
+                accessToken = auth.getValidToken();
+                twitchLogin = auth.getLoginFromToken(accessToken);
+                final String login = twitchLogin;
+                SwingUtilities.invokeLater(() ->
+                    overlay.appendSystemMessage(
+                        "✔ Twitch OAuth OK — conectado como " + login));
+            } catch (Exception e) {
+                System.err.println("[Auth] Error OAuth: " + e.getMessage());
+                SwingUtilities.invokeLater(() ->
+                    overlay.appendSystemMessage(
+                        "⚠ Twitch OAuth falló, conectando en modo anónimo."));
+            }
 
-                Thread eventSubThread = new Thread(eventSub, "twitch-eventsub");
-                eventSubThread.setDaemon(true);
-                eventSubThread.start();
+            // IRC
+            final String finalToken = accessToken;
+            final String finalLogin = twitchLogin;
+            try {
+                Thread t = new Thread(
+                        new TwitchChatReader(config.getTwitchChannel(),
+                                            queue, finalToken, finalLogin),
+                        "twitch-reader");
+                t.setDaemon(true);
+                t.start();
 
+                // Verificar que conecta esperando un poco
+                Thread.sleep(3000);
+
+                // Si llegamos aquí sin excepción, consideramos éxito
+                config.saveLastConnectionSuccess("twitch", true);
                 SwingUtilities.invokeLater(() -> {
-                    overlay.setEventSub(eventSub);
-                    overlay.appendSystemMessage("✔ EventSub conectado. Recompensas activas.");
+                    overlay.appendSystemMessage("✔ Conectado al chat de Twitch.");
+                    overlay.showTwitchViewers();
                 });
             } catch (Exception e) {
-                System.err.println("[Main] Error EventSub: " + e.getMessage());
-                SwingUtilities.invokeLater(() ->
-                    overlay.appendSystemMessage("⚠ EventSub no disponible: "
-                            + e.getMessage()));
+                config.saveLastConnectionSuccess("twitch", false);
+                System.err.println("[Main] Error Twitch IRC: " + e.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    overlay.appendSystemMessage("✖ Error conectando Twitch. Puedes reintentar.");
+                    overlay.enableTwitchButton(); // rehabilitar para reintento
+                    overlay.showTwitchButton();
+                });
+                return;
             }
-        }
 
-        // YouTube
-        try {
-            Thread youtubeThread = new Thread(
-                    new YouTubeChatReader(config.getYoutubeChannelId(),
-                                        config.getYoutubeVideoId(),
-                                        config.getYoutubeApiKeys(),
-                                        queue, config, sharedImageCache),
-                    "youtube-reader");
-            youtubeThread.setDaemon(true);
-            youtubeThread.start();
-            SwingUtilities.invokeLater(() ->
-                overlay.appendSystemMessage("✔ Conectado al chat de YouTube."));
-        } catch (Exception e) {
-            System.err.println("[Main] Error YouTube: " + e.getMessage());
-            SwingUtilities.invokeLater(() ->
-                overlay.appendSystemMessage("⚠ YouTube no disponible: "
-                        + e.getMessage()));
-        }
+            // EventSub
+            if (accessToken != null) {
+                try {
+                    TwitchEventSub eventSub = new TwitchEventSub(
+                            accessToken, config.getTwitchClientId(),
+                            config.getTwitchChannelId(), queue);
+                    eventSubHolder[0] = eventSub;
+                    Thread t = new Thread(eventSub, "twitch-eventsub");
+                    t.setDaemon(true);
+                    t.start();
+                    SwingUtilities.invokeLater(() -> {
+                        overlay.setEventSub(eventSub);
+                        overlay.appendSystemMessage(
+                            "✔ EventSub conectado. Recompensas activas.");
+                    });
+                } catch (Exception e) {
+                    System.err.println("[Main] Error EventSub: " + e.getMessage());
+                    SwingUtilities.invokeLater(() ->
+                        overlay.appendSystemMessage(
+                            "⚠ EventSub no disponible: " + e.getMessage()));
+                }
+            }
+        });
+    }
+
+    private static void connectYoutube(Config config,
+                                        BlockingQueue<ChatMessage> queue,
+                                        ImageCache sharedImageCache,
+                                        ChatOverlay overlay) {
+        Thread.ofVirtual().name("youtube-connect").start(() -> {
+            try {
+                Thread t = new Thread(
+                        new YouTubeChatReader(config.getYoutubeChannelId(),
+                                            config.getYoutubeVideoId(),
+                                            config.getYoutubeApiKeys(),
+                                            queue, config, sharedImageCache),
+                        "youtube-reader");
+                t.setDaemon(true);
+                t.start();
+
+                Thread.sleep(3000);
+
+                config.saveLastConnectionSuccess("youtube", true);
+                SwingUtilities.invokeLater(() -> {
+                    overlay.appendSystemMessage("✔ Conectado al chat de YouTube.");
+                    overlay.showYoutubeViewers();
+                });
+            } catch (Exception e) {
+                config.saveLastConnectionSuccess("youtube", false);
+                System.err.println("[Main] Error YouTube: " + e.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    overlay.appendSystemMessage("✖ Error conectando YouTube. Puedes reintentar.");
+                    overlay.enableYoutubeButton();
+                    overlay.showYoutubeButton();
+                });
+            }
+        });
     }
 }

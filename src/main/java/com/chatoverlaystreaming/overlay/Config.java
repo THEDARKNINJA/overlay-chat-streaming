@@ -88,6 +88,12 @@ public class Config {
     public boolean getLoadBTTV() { return misc.optBoolean("loadBTTV", true); }
     public int getMessageTimeout() { return misc.optInt("messageTimeoutSeconds", 0); } // 0 = no borrar
     public boolean getLogActivity() { return misc.optBoolean("logActivity", false); } // 0 = no borrar
+    public boolean getLastConnectionSuccess(String platform) {
+        // platform = "twitch" o "youtube"
+        if (!root.has("lastSession")) return false;
+        return root.getJSONObject("lastSession")
+                .optBoolean(platform + "Success", false);
+    }
 
     // Recompensa completa
     public JSONObject getRewardConfig(String rewardId) {
@@ -114,6 +120,19 @@ public class Config {
     public void saveTwitchReward(String rewardId, JSONObject rewardConfig) throws IOException {
         getTwitchRewards().put(rewardId, rewardConfig);
         Files.writeString(getPathJSON(), root.toString(2));
+    }
+
+    public void saveLastConnectionSuccess(String platform, boolean success) {
+        try {
+            if (!root.has("lastSession")) {
+                root.put("lastSession", new org.json.JSONObject());
+            }
+            root.getJSONObject("lastSession").put(platform + "Success", success);
+            Files.writeString(Paths.get("config.json"), root.toString(2));
+        } catch (IOException e) {
+            System.err.println("[Config] Error guardando estado de sesión: "
+                    + e.getMessage());
+        }
     }
 
     public void savePanel(int x, int y, int width, int height) throws IOException {
