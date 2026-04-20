@@ -25,7 +25,7 @@ replay_pid*
 
 #config file
 config.json
-package.bat
+package_first.bat
 package_fix.bat
 package_jdeps.bat
 
