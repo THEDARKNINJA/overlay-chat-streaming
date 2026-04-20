@@ -50,6 +50,8 @@ public class ChatOverlay extends JFrame {
     private boolean canClickLink;
     private boolean isLocked = true;
     private boolean hasFocus = false;
+    private String twitchViewers  = "?";
+    private String youtubeViewers = "?";
     private JPanel viewerPanel;
     private ImageIcon twitchIcon;
     private ImageIcon youtubeIcon;
@@ -272,16 +274,62 @@ public class ChatOverlay extends JFrame {
         resizeHandle.setOpaque(false);
         resizeHandle.setPreferredSize(new Dimension(16, 16));
         
-        viewerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        viewerPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                if (!config.getShowViewerCount()) return;
+
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+                Font font = new Font("Segoe UI", Font.BOLD, 12);
+                g2.setFont(font);
+                FontMetrics fm = g2.getFontMetrics();
+
+                int x = 6;
+                int y = getHeight() / 2;
+
+                // Icono Twitch
+                if (twitchIcon != null) {
+                    twitchIcon.paintIcon(this, g2, x, y - 7);
+                } else {
+                    g2.setColor(new Color(100, 60, 200, 200));
+                    g2.fillRoundRect(x, y - 7, 14, 14, 4, 4);
+                    g2.setColor(Color.WHITE);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 8));
+                    g2.drawString("T", x + 4, y + 3);
+                }
+
+                // Número Twitch
+                g2.setFont(font);
+                g2.setColor(new Color(220, 200, 255));
+                x += 18;
+                g2.drawString(twitchViewers, x, y + fm.getAscent() / 2);
+                x += fm.stringWidth(twitchViewers) + 10;
+
+                // Icono YouTube
+                if (youtubeIcon != null) {
+                    youtubeIcon.paintIcon(this, g2, x, y - 7);
+                } else {
+                    g2.setColor(new Color(200, 40, 40, 200));
+                    g2.fillRoundRect(x, y - 7, 14, 14, 4, 4);
+                    g2.setColor(Color.WHITE);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 8));
+                    g2.drawString("Y", x + 4, y + 3);
+                }
+
+                // Número YouTube
+                g2.setFont(font);
+                g2.setColor(new Color(255, 150, 150));
+                x += 18;
+                g2.drawString(youtubeViewers, x, y + fm.getAscent() / 2);
+
+                g2.dispose();
+            }
+        };
         viewerPanel.setOpaque(false);
-        if (!config.isTwitchEnabled()) {
-            twitchStatusPanel.setVisible(false);
-        }
-        if (!config.isYoutubeEnabled()) {
-            youtubeStatusPanel.setVisible(false);
-        }
-        viewerPanel.add(twitchStatusPanel);
-        viewerPanel.add(youtubeStatusPanel);
+        viewerPanel.setPreferredSize(new Dimension(80, 20));
 
         JPanel rewardsWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         rewardsWrapper.setBackground(new Color(14, 14, 16));
@@ -543,10 +591,14 @@ public class ChatOverlay extends JFrame {
         if (config.getShowViewerCount()) {
             ViewerCountService viewerService = new ViewerCountService(
                 config,
-                count -> SwingUtilities.invokeLater(() ->
-                    twitchViewersLabel.setText(count)),
-                count -> SwingUtilities.invokeLater(() ->
-                    youtubeViewersLabel.setText(count))
+                count -> SwingUtilities.invokeLater(() -> {
+                    twitchViewers = count;
+                    viewerPanel.repaint();
+                }),
+                count -> SwingUtilities.invokeLater(() -> {
+                    youtubeViewers = count;
+                    viewerPanel.repaint();
+                })
             );
             viewerService.start();
         }
@@ -555,10 +607,7 @@ public class ChatOverlay extends JFrame {
         addWindowFocusListener(new java.awt.event.WindowFocusListener() {
             @Override
             public void windowGainedFocus(java.awt.event.WindowEvent e) {
-                Boolean oauthReady = (Boolean) rewardsButton.getClientProperty("oauthReady");
-                if (Boolean.TRUE.equals(oauthReady)) {
-                    rewardsButton.setVisible(true);
-                }
+                rewardsButton.setVisible(true);
                 obsVisibilityBtn.setVisible(true);
                 configButton.setVisible(true);
             }
@@ -1173,24 +1222,5 @@ public class ChatOverlay extends JFrame {
 
     public void enableYoutubeButton() {
         youtubeConnectBtn.setEnabled(true);
-    }
-    
-    public void showTwitchButtonAnon() {
-        // Cambiar el tooltip y color del botón para indicar modo anónimo
-        twitchConnectBtn.setEnabled(true);
-        twitchConnectBtn.setToolTipText(
-            "Conectado en modo anónimo — pulsa para reintentar con OAuth");
-        twitchConnectBtn.setBorder(BorderFactory.createLineBorder(
-                new Color(200, 150, 50), 1)); // naranja = anónimo
-        showPlatformButton(twitchStatusPanel);
-    }
-    public void enableRewardsButton() {
-        // Solo mostrar el botón cuando hay OAuth — se llamará desde Main
-        // cuando el EventSub esté activo
-        rewardsButton.putClientProperty("oauthReady", true);
-        // Mostrar inmediatamente si ya tenemos el foco
-        if (hasFocus) {
-            rewardsButton.setVisible(true);
-        }
     }
 }

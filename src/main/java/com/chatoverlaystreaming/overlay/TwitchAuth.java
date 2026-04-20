@@ -11,7 +11,10 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import javax.swing.SwingUtilities;
 
 public class TwitchAuth {
 
@@ -72,7 +75,21 @@ public class TwitchAuth {
             conn.setRequestProperty("Authorization", "OAuth " + token);
             conn.setConnectTimeout(5000);
             conn.setReadTimeout(5000);
-            return conn.getResponseCode() == 200;
+
+            if (conn.getResponseCode() != 200) return false;
+
+            // Verificar que el clientId del token coincide con el configurado
+            try (InputStream is = conn.getInputStream()) {
+                JSONObject response = new JSONObject(
+                        new String(is.readAllBytes(), StandardCharsets.UTF_8));
+                String tokenClientId = response.optString("client_id", "");
+                if (!tokenClientId.equals(clientId)) {
+                    System.out.println("[Auth] Token de otro clientId, " +
+                            "requiriendo nueva autorización.");
+                    return false;
+                }
+            }
+            return true;
         } catch (Exception e) {
             return false;
         }
@@ -93,76 +110,47 @@ public class TwitchAuth {
     }
 
     private String doOAuthFlow() throws Exception {
-        // Generar code_verifier y code_challenge para PKCE
         String codeVerifier  = generateCodeVerifier();
         String codeChallenge = generateCodeChallenge(codeVerifier);
         String state         = generateState();
 
-        // Construir URL de autorización
         String authUrl = AUTH_URL +
                 "?client_id=" + clientId +
-                "&redirect_uri=" + URLEncoder.encode(REDIRECT_URI, StandardCharsets.UTF_8) +
+                "&redirect_uri=" + URLEncoder.encode(REDIRECT_URI,
+                        StandardCharsets.UTF_8) +
                 "&response_type=code" +
                 "&scope=" + URLEncoder.encode(SCOPE, StandardCharsets.UTF_8) +
                 "&state=" + state +
                 "&code_challenge=" + codeChallenge +
                 "&code_challenge_method=S256";
 
-        // Servidor temporal para capturar el código
-        CountDownLatch latch = new CountDownLatch(1);
+        // Resultado del flujo
         AtomicReference<String> codeRef  = new AtomicReference<>();
         AtomicReference<String> errorRef = new AtomicReference<>();
+        CountDownLatch latch = new CountDownLatch(1);
 
-        HttpServer server = HttpServer.create(
-                new InetSocketAddress("localhost", REDIRECT_PORT), 0);
-
-        server.createContext("/", exchange -> {
-            String query = exchange.getRequestURI().getQuery();
-            String responseHtml;
-
-            if (query != null && query.contains("code=")) {
-                // Extraer code y state
-                String code = extractParam(query, "code");
-                String receivedState = extractParam(query, "state");
-
-                if (!state.equals(receivedState)) {
-                    errorRef.set("State no coincide, posible ataque CSRF.");
-                    responseHtml = buildHtmlPage("Error de seguridad",
-                            "El parámetro state no coincide. Cierra esta ventana.", false);
-                } else {
+        SwingUtilities.invokeLater(() -> {
+            OAuthBrowser browser = new OAuthBrowser(
+                null,      // owner — pasar la ventana principal si la tienes accesible
+                authUrl,
+                state,
+                REDIRECT_PORT,
+                code -> {
                     codeRef.set(code);
-                    responseHtml = buildHtmlPage("¡Autorización completada!",
-                            "Ya puedes cerrar esta ventana y volver al overlay.", true);
+                    latch.countDown();
+                },
+                error -> {
+                    errorRef.set(error);
+                    latch.countDown();
                 }
-            } else {
-                String error = extractParam(query, "error_description");
-                errorRef.set(error != null ? error : "El usuario canceló la autorización.");
-                responseHtml = buildHtmlPage("Autorización cancelada",
-                        "Puedes cerrar esta ventana.", false);
-            }
-
-            byte[] bytes = responseHtml.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(200, bytes.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(bytes);
-            }
-            latch.countDown();
+            );
+            browser.setVisible(true);
         });
 
-        server.setExecutor(null);
-        server.start();
-
-        // Abrir el navegador
-        System.out.println("[Auth] Abriendo navegador para autorización...");
-        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-            Desktop.getDesktop().browse(URI.create(authUrl));
-        } else {
-            System.err.println("[Auth] No se pudo abrir el navegador. Abre esta URL manualmente:\n" + authUrl);
+        // Esperar resultado (máximo 5 minutos)
+        if (!latch.await(5, TimeUnit.MINUTES)) {
+            throw new Exception("Timeout esperando autorización OAuth.");
         }
-
-        // Esperar a que el usuario autorice (máximo 5 minutos)
-        latch.await(5, java.util.concurrent.TimeUnit.MINUTES);
-        server.stop(0);
 
         if (errorRef.get() != null) {
             throw new Exception("OAuth fallido: " + errorRef.get());
@@ -170,10 +158,9 @@ public class TwitchAuth {
 
         String code = codeRef.get();
         if (code == null) {
-            throw new Exception("No se recibió código de autorización (timeout).");
+            throw new Exception("No se recibió código de autorización.");
         }
 
-        // Intercambiar código por token
         return exchangeCodeForToken(code, codeVerifier);
     }
 

@@ -50,6 +50,7 @@ public class Config {
         return appDir.resolve("config.json");
     }
 
+    public boolean isTwitchEnabled() { return twitch.optBoolean("enabled", true); }
     public String getTwitchChannel()   { return twitch.optString("channel", "");   }
     public String getTwitchChannelId() { return twitch.optString("channelId", ""); }
     public String getTwitchClientId() { return twitch.optString("clientId", ""); }
@@ -67,6 +68,7 @@ public class Config {
     }
 
 
+    public boolean isYoutubeEnabled() { return youtube.optBoolean("enabled", true); }
     public String getYoutubeChannelId()  { return youtube.optString("channelId", "");  }
     public String getYoutubeVideoId()  { return youtube.optString("videoId", "");  }
     public String getYoutubeApiKey()   { return getYoutubeApiKeys().get(0);   }
@@ -88,6 +90,12 @@ public class Config {
     public boolean getLoadBTTV() { return misc.optBoolean("loadBTTV", true); }
     public int getMessageTimeout() { return misc.optInt("messageTimeoutSeconds", 0); } // 0 = no borrar
     public boolean getLogActivity() { return misc.optBoolean("logActivity", false); } // 0 = no borrar
+    public boolean getLastConnectionSuccess(String platform) {
+        // platform = "twitch" o "youtube"
+        if (!root.has("lastSession")) return false;
+        return root.getJSONObject("lastSession")
+                .optBoolean(platform + "Success", false);
+    }
 
     // Recompensa completa
     public JSONObject getRewardConfig(String rewardId) {
@@ -114,6 +122,19 @@ public class Config {
     public void saveTwitchReward(String rewardId, JSONObject rewardConfig) throws IOException {
         getTwitchRewards().put(rewardId, rewardConfig);
         Files.writeString(getPathJSON(), root.toString(2));
+    }
+
+    public void saveLastConnectionSuccess(String platform, boolean success) {
+        try {
+            if (!root.has("lastSession")) {
+                root.put("lastSession", new org.json.JSONObject());
+            }
+            root.getJSONObject("lastSession").put(platform + "Success", success);
+            Files.writeString(Paths.get("config.json"), root.toString(2));
+        } catch (IOException e) {
+            System.err.println("[Config] Error guardando estado de sesión: "
+                    + e.getMessage());
+        }
     }
 
     public void savePanel(int x, int y, int width, int height) throws IOException {
@@ -177,6 +198,7 @@ public class Config {
     }
 
     public void saveAll(
+        boolean twitchEnabled, boolean youtubeEnabled,
         String twitchChannel, String twitchChannelId,
         String twitchClientId, String twitchClientSecret,
         String ytChannelId, String ytVideoId, List<String> apiKeys,
@@ -185,11 +207,18 @@ public class Config {
         boolean canClickLink, boolean loadBTTV,
         int messageTimeoutSeconds, boolean logActivity) throws IOException {
 
+
+        twitch.put("enabled", twitchEnabled);
         twitch.put("channel",       twitchChannel);
         twitch.put("channelId",     twitchChannelId);
-        twitch.put("clientId",      twitchClientId);
-        twitch.put("clientSecret",  twitchClientSecret);
+        if(getTwitchClientId() != twitchClientId || getTwitchClientSecret() != twitchClientSecret) {
+            twitch.put("clientId",      twitchClientId);
+            twitch.put("clientSecret",  twitchClientSecret);
+            twitch.put("accessToken",   "");
+            twitch.put("refreshToken",  "");
+        }
 
+        youtube.put("enabled", youtubeEnabled);
         youtube.put("channelId", ytChannelId);
         youtube.put("videoId",   ytVideoId);
         org.json.JSONArray keys = new org.json.JSONArray();

@@ -12,6 +12,10 @@ public class TwitchChatReader implements Runnable {
     private final BlockingQueue<ChatMessage> queue;
     private final String oauthToken;
     private final String twitchLogin;
+    
+    private java.util.function.Consumer<String> onConnected;
+    private java.util.function.Consumer<String> onFatalError;
+    private volatile boolean fatalError = false;
 
     public TwitchChatReader(String channel, BlockingQueue<ChatMessage> queue, String oauthToken, String twitchLogin) {
         this.channel     = channel.toLowerCase();
@@ -22,11 +26,13 @@ public class TwitchChatReader implements Runnable {
 
     @Override
     public void run() {
-        while (!Thread.currentThread().isInterrupted()) {
+        while (!Thread.currentThread().isInterrupted() && !fatalError) {
             try {
                 connect();
             } catch (Exception e) {
-                System.err.println("[Twitch] Error: " + e.getMessage() + " — reconectando en 5s");
+                if (fatalError) break;
+                System.err.println("[Twitch] Error: " + e.getMessage() 
+                        + " — reconectando en 5s");
                 sleep(5000);
             }
         }
@@ -48,27 +54,82 @@ public class TwitchChatReader implements Runnable {
             writer.println("PASS oauth:twitch_anonymous");
             writer.println("NICK justinfan" + (int)(Math.random() * 90000 + 10000));
         }
-        writer.println("CAP REQ :twitch.tv/tags twitch.tv/commands");
+        writer.println("CAP REQ :twitch.tv/tags");
         writer.println("JOIN #" + channel);
+
+        boolean joinConfirmed = false;
 
         String line;
         while ((line = reader.readLine()) != null) {
-            
             if (line.startsWith("PING")) {
                 writer.println("PONG :tmi.twitch.tv");
                 continue;
             }
-            
-            if (line.contains("PRIVMSG")) {
-                handlePrivmsg(line);
-            } else if (line.contains("USERNOTICE")) {
-                handleUsernotice(line);
-            } else if (line.contains("CLEARCHAT")) {
-                handleClearchat(line);
-            } else if (line.contains("CLEARMSG")) {
-                handleClearmsg(line);
+
+            // 353 = RPL_NAMREPLY: JOIN exitoso, el canal existe
+            if (!joinConfirmed && line.contains("353")) {
+                joinConfirmed = true;
+                if (onConnected != null) {
+                    onConnected.accept(channel);
+                }
             }
-            //System.err.println("[Twitch IRC] " + line);
+
+            /*
+            // NOTICE antes del JOIN confirmado = canal inválido o suspendido
+            if (!joinConfirmed && line.contains("NOTICE") && line.contains("*")) {
+                // Ejemplos:
+                // :tmi.twitch.tv NOTICE * :Error logging in
+                // :tmi.twitch.tv NOTICE * :Improperly formatted auth
+                String noticeMsg = line.contains(":") 
+                        ? line.substring(line.lastIndexOf(':') + 1).trim()
+                        : line;
+                fatalError = true; // no reconectar
+                if (onFatalError != null) {
+                    onFatalError.accept("Error de conexión: " + noticeMsg);
+                }
+                return; // salir sin reconectar
+            }
+                */
+
+            if (!joinConfirmed) {
+                System.out.println("[Twitch IRC pre-JOIN] " + line);
+            }
+            // Antes de confirmar el JOIN, detectar NOTICEs problemáticos
+            if (!joinConfirmed && line.contains("NOTICE")) {
+                String noticeLower = line.toLowerCase();
+                boolean isFatal =
+                        noticeLower.contains("does not exist") ||
+                        noticeLower.contains("has been suspended") ||
+                        noticeLower.contains("authentication failed") ||
+                        noticeLower.contains("login unsuccessful") ||
+                        noticeLower.contains("improperly formatted") ||
+                        noticeLower.contains("error logging in");
+
+                if (isFatal) {
+                    String noticeMsg = line.contains(":")
+                            ? line.substring(line.lastIndexOf(':') + 1).trim()
+                            : line;
+                    System.err.println("[Twitch] NOTICE fatal: " + noticeMsg);
+                    fatalError = true;
+                    if (onFatalError != null) {
+                        onFatalError.accept("Twitch: " + noticeMsg);
+                    }
+                    return;
+                }
+            }
+
+            // 353 = JOIN exitoso
+            if (!joinConfirmed && line.contains("353")) {
+                joinConfirmed = true;
+                if (onConnected != null) {
+                    onConnected.accept(channel);
+                }
+            }
+
+            if (line.contains("PRIVMSG"))      handlePrivmsg(line);
+            else if (line.contains("USERNOTICE")) handleUsernotice(line);
+            else if (line.contains("CLEARCHAT"))  handleClearchat(line);
+            else if (line.contains("CLEARMSG"))   handleClearmsg(line);
         }
     }
 
@@ -223,5 +284,13 @@ public class TwitchChatReader implements Runnable {
         try { Thread.sleep(ms); } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    public void setOnConnected(java.util.function.Consumer<String> callback) {
+        this.onConnected = callback;
+    }
+
+    public void setOnFatalError(java.util.function.Consumer<String> callback) {
+        this.onFatalError = callback;
     }
 }
