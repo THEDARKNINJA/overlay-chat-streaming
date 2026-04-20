@@ -1,5 +1,3 @@
-# overlay-chat-streaming
-
 # Chat Overlay Streaming
 
 Aplicación de escritorio Java que muestra el chat de Twitch y YouTube como un overlay transparente sobre cualquier ventana o juego, con soporte de emotes, recompensas de canal, reproducción de media y gestión completa desde la propia interfaz.
