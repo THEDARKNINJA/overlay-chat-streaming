@@ -81,13 +81,15 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
 
     @Override
     public void play() {
+        int vlcVolume = (int)(volume * 100);
+        mediaPlayer.audio().setVolume(vlcVolume);
         // Registrar eventos
         mediaPlayer.events().addMediaPlayerEventListener(
                 new uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter() {
 
             @Override
             public void playing(uk.co.caprica.vlcj.player.base.MediaPlayer player) {
-                mediaPlayer.audio().setVolume((int)(volume * 100));
+                mediaPlayer.audio().setVolume(vlcVolume);
                 if (onReadyCallback != null) onReadyCallback.run();
             }
 

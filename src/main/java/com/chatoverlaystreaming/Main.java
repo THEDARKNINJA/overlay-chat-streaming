@@ -10,11 +10,14 @@ import com.chatoverlaystreaming.readers.TwitchEventSub;
 import com.chatoverlaystreaming.readers.YouTubeChatReader;
 
 import javafx.embed.swing.JFXPanel;
+import javafx.scene.paint.Color;
 
 import javax.swing.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
     public static void main(String[] args) {
@@ -77,13 +80,26 @@ public class Main {
             boolean youtubeWasOk = finalConfig.getLastConnectionSuccess("youtube");
 
             // Configurar los botones de reconexión manual
-            overlay.setTwitchConnectAction(() ->
-                connectTwitch(finalConfig, queue, sharedImageCache,
-                            overlay, eventSubHolder));
+            if (finalConfig.isTwitchEnabled()) {
+                overlay.showTwitchButton();
+                overlay.setTwitchConnectAction(() ->
+                    connectTwitch(finalConfig, queue, sharedImageCache,
+                                overlay, eventSubHolder));
+            }
 
-            overlay.setYoutubeConnectAction(() ->
-                connectYoutube(finalConfig, queue, sharedImageCache, overlay));
+            if (finalConfig.isYoutubeEnabled()) {
+                overlay.showYoutubeButton();
+                overlay.setYoutubeConnectAction(() ->
+                    connectYoutube(finalConfig, queue, sharedImageCache, overlay));
+            }
 
+            if (!finalConfig.isTwitchEnabled() && !finalConfig.isYoutubeEnabled()) {
+                overlay.appendSystemMessage(
+                    "⚠ Ninguna plataforma habilitada. Actívala alguna en ⚙ Configuración.");
+            }
+
+                /*
+            // Conexión directa al abrir
             if (!twitchWasOk && !youtubeWasOk) {
                 // Primera vez o ambas fallaron — mostrar botones y mensaje
                 overlay.showTwitchButton();
@@ -115,21 +131,22 @@ public class Main {
                         "Pulsa el botón de YouTube para reintentar.");
                 }
             }
+            */
         });
     }
 
     private static void connectTwitch(Config config,
-                                    BlockingQueue<ChatMessage> queue,
-                                    ImageCache sharedImageCache,
-                                    ChatOverlay overlay,
-                                    TwitchEventSub[] eventSubHolder) {
+                                   BlockingQueue<ChatMessage> queue,
+                                   ImageCache sharedImageCache,
+                                   ChatOverlay overlay,
+                                   TwitchEventSub[] eventSubHolder) {
         Thread.ofVirtual().name("twitch-connect").start(() -> {
-            // OAuth
             String accessToken = null;
             String twitchLogin = null;
+
+            // Intentar OAuth
             try {
-                TwitchAuth auth = new TwitchAuth(
-                        config.getTwitchClientId(), config);
+                TwitchAuth auth = new TwitchAuth(config.getTwitchClientId(), config);
                 accessToken = auth.getValidToken();
                 twitchLogin = auth.getLoginFromToken(accessToken);
                 final String login = twitchLogin;
@@ -140,41 +157,47 @@ public class Main {
                 System.err.println("[Auth] Error OAuth: " + e.getMessage());
                 SwingUtilities.invokeLater(() ->
                     overlay.appendSystemMessage(
-                        "⚠ Twitch OAuth falló, conectando en modo anónimo."));
+                        "⚠ OAuth falló (" + e.getMessage() + ") — " +
+                        "conectando en modo anónimo con funcionalidad limitada. " +
+                        "Pulsa el botón de Twitch para reintentar OAuth."));
             }
 
-            // IRC
-            final String finalToken = accessToken;
-            final String finalLogin = twitchLogin;
+            // Lanzar reader (con token si lo hay, anónimo si no)
+            AtomicReference<Thread> readerThread = new AtomicReference<>();
             try {
-                Thread t = new Thread(
-                        new TwitchChatReader(config.getTwitchChannel(),
-                                            queue, finalToken, finalLogin),
-                        "twitch-reader");
-                t.setDaemon(true);
-                t.start();
+                String error = launchTwitchReader(config, queue,
+                        accessToken, twitchLogin, readerThread);
 
-                // Verificar que conecta esperando un poco
-                Thread.sleep(3000);
+                if (error != null) {
+                    SwingUtilities.invokeLater(() -> {
+                        overlay.appendSystemMessage("✖ " + error);
+                        overlay.showTwitchButton();
+                        overlay.enableTwitchButton();
+                    });
+                    return;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
 
-                // Si llegamos aquí sin excepción, consideramos éxito
-                config.saveLastConnectionSuccess("twitch", true);
+            // Conexión confirmada
+            if (accessToken != null) {
+                // OAuth OK: mostrar viewers normales
                 SwingUtilities.invokeLater(() -> {
                     overlay.appendSystemMessage("✔ Conectado al chat de Twitch.");
                     overlay.showTwitchViewers();
                 });
-            } catch (Exception e) {
-                config.saveLastConnectionSuccess("twitch", false);
-                System.err.println("[Main] Error Twitch IRC: " + e.getMessage());
+            } else {
+                // Modo anónimo: mostrar botón naranja para reintentar OAuth
                 SwingUtilities.invokeLater(() -> {
-                    overlay.appendSystemMessage("✖ Error conectando Twitch. Puedes reintentar.");
-                    overlay.enableTwitchButton(); // rehabilitar para reintento
-                    overlay.showTwitchButton();
+                    overlay.appendSystemMessage(
+                        "✔ Conectado al chat de Twitch en modo anónimo.");
+                    overlay.showTwitchButtonAnon();
                 });
-                return;
             }
 
-            // EventSub
+            // EventSub solo si hay OAuth
             if (accessToken != null) {
                 try {
                     TwitchEventSub eventSub = new TwitchEventSub(
@@ -186,6 +209,7 @@ public class Main {
                     t.start();
                     SwingUtilities.invokeLater(() -> {
                         overlay.setEventSub(eventSub);
+                        overlay.enableRewardsButton();
                         overlay.appendSystemMessage(
                             "✔ EventSub conectado. Recompensas activas.");
                     });
@@ -199,35 +223,92 @@ public class Main {
         });
     }
 
+    /**
+     * Lanza un TwitchChatReader y espera confirmación de JOIN.
+     * Devuelve null si conectó bien, o el mensaje de error si falló.
+     */
+    private static String launchTwitchReader(Config config,
+                                            BlockingQueue<ChatMessage> queue,
+                                            String token, String login,
+                                            java.util.concurrent.atomic.AtomicReference<Thread> threadRef) 
+            throws InterruptedException {
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<String> connectError = new AtomicReference<>();
+
+        TwitchChatReader reader = new TwitchChatReader(
+                config.getTwitchChannel(), queue, token, login);
+
+        reader.setOnConnected(ch -> latch.countDown());
+        reader.setOnFatalError(error -> {
+            connectError.set(error);
+            latch.countDown();
+        });
+
+        Thread t = new Thread(reader, token != null ? "twitch-reader" : "twitch-reader-anon");
+        t.setDaemon(true);
+        t.start();
+        threadRef.set(t);
+
+        boolean connected = latch.await(10, TimeUnit.SECONDS);
+
+        if (!connected) {
+            t.interrupt();
+            return "Timeout conectando a Twitch — revisa el nombre del canal.";
+        }
+
+        return connectError.get(); // null si fue bien, mensaje si falló
+}
+
     private static void connectYoutube(Config config,
-                                        BlockingQueue<ChatMessage> queue,
-                                        ImageCache sharedImageCache,
-                                        ChatOverlay overlay) {
+                                    BlockingQueue<ChatMessage> queue,
+                                    ImageCache sharedImageCache,
+                                    ChatOverlay overlay) {
         Thread.ofVirtual().name("youtube-connect").start(() -> {
             try {
-                Thread t = new Thread(
-                        new YouTubeChatReader(config.getYoutubeChannelId(),
-                                            config.getYoutubeVideoId(),
-                                            config.getYoutubeApiKeys(),
-                                            queue, config, sharedImageCache),
-                        "youtube-reader");
+                YouTubeChatReader reader = new YouTubeChatReader(
+                        config.getYoutubeChannelId(),
+                        config.getYoutubeVideoId(),
+                        config.getYoutubeApiKeys(),
+                        queue, config, sharedImageCache);
+
+                reader.setOnFatalError(errorMsg -> SwingUtilities.invokeLater(() -> {
+                    overlay.showYoutubeButton();
+                    overlay.enableYoutubeButton();
+                    overlay.appendSystemMessage(
+                        "✖ " + errorMsg + " — pulsa el botón para reintentar.");
+                }));
+
+                Thread t = new Thread(reader, "youtube-reader");
                 t.setDaemon(true);
                 t.start();
 
-                Thread.sleep(3000);
+                // Esperar hasta 15 segundos a que resuelva el liveChatId
+                long deadline = System.currentTimeMillis() + 15000;
+                while (System.currentTimeMillis() < deadline) {
+                    if (reader.isConnected()) {
+                        SwingUtilities.invokeLater(() -> {
+                            overlay.appendSystemMessage("✔ Conectado al chat de YouTube.");
+                            overlay.showYoutubeViewers();
+                        });
+                        return;
+                    }
+                    Thread.sleep(500);
+                }
 
-                config.saveLastConnectionSuccess("youtube", true);
-                SwingUtilities.invokeLater(() -> {
-                    overlay.appendSystemMessage("✔ Conectado al chat de YouTube.");
-                    overlay.showYoutubeViewers();
-                });
+                // 15 segundos sin conectar ni error fatal:
+                // puede ser que no haya directo pero el reader sigue en bucle
+                // Si initialConnectionDone sigue false, el onFatalError ya habrá saltado
+                // Si no saltó es porque está en sleep(RETRY_INTERVAL) — no puede pasar
+                // en la primera conexión con el nuevo código, así que no hacemos nada más
+
             } catch (Exception e) {
-                config.saveLastConnectionSuccess("youtube", false);
-                System.err.println("[Main] Error YouTube: " + e.getMessage());
+                System.err.println("[Main] Error iniciando YouTube: " + e.getMessage());
                 SwingUtilities.invokeLater(() -> {
-                    overlay.appendSystemMessage("✖ Error conectando YouTube. Puedes reintentar.");
-                    overlay.enableYoutubeButton();
+                    overlay.appendSystemMessage(
+                        "✖ Error conectando YouTube: " + e.getMessage());
                     overlay.showYoutubeButton();
+                    overlay.enableYoutubeButton();
                 });
             }
         });

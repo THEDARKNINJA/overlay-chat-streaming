@@ -274,6 +274,12 @@ public class ChatOverlay extends JFrame {
         
         viewerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         viewerPanel.setOpaque(false);
+        if (!config.isTwitchEnabled()) {
+            twitchStatusPanel.setVisible(false);
+        }
+        if (!config.isYoutubeEnabled()) {
+            youtubeStatusPanel.setVisible(false);
+        }
         viewerPanel.add(twitchStatusPanel);
         viewerPanel.add(youtubeStatusPanel);
 
@@ -549,7 +555,10 @@ public class ChatOverlay extends JFrame {
         addWindowFocusListener(new java.awt.event.WindowFocusListener() {
             @Override
             public void windowGainedFocus(java.awt.event.WindowEvent e) {
-                rewardsButton.setVisible(true);
+                Boolean oauthReady = (Boolean) rewardsButton.getClientProperty("oauthReady");
+                if (Boolean.TRUE.equals(oauthReady)) {
+                    rewardsButton.setVisible(true);
+                }
                 obsVisibilityBtn.setVisible(true);
                 configButton.setVisible(true);
             }
@@ -1164,5 +1173,24 @@ public class ChatOverlay extends JFrame {
 
     public void enableYoutubeButton() {
         youtubeConnectBtn.setEnabled(true);
+    }
+    
+    public void showTwitchButtonAnon() {
+        // Cambiar el tooltip y color del botón para indicar modo anónimo
+        twitchConnectBtn.setEnabled(true);
+        twitchConnectBtn.setToolTipText(
+            "Conectado en modo anónimo — pulsa para reintentar con OAuth");
+        twitchConnectBtn.setBorder(BorderFactory.createLineBorder(
+                new Color(200, 150, 50), 1)); // naranja = anónimo
+        showPlatformButton(twitchStatusPanel);
+    }
+    public void enableRewardsButton() {
+        // Solo mostrar el botón cuando hay OAuth — se llamará desde Main
+        // cuando el EventSub esté activo
+        rewardsButton.putClientProperty("oauthReady", true);
+        // Mostrar inmediatamente si ya tenemos el foco
+        if (hasFocus) {
+            rewardsButton.setVisible(true);
+        }
     }
 }

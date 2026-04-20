@@ -75,7 +75,21 @@ public class TwitchAuth {
             conn.setRequestProperty("Authorization", "OAuth " + token);
             conn.setConnectTimeout(5000);
             conn.setReadTimeout(5000);
-            return conn.getResponseCode() == 200;
+
+            if (conn.getResponseCode() != 200) return false;
+
+            // Verificar que el clientId del token coincide con el configurado
+            try (InputStream is = conn.getInputStream()) {
+                JSONObject response = new JSONObject(
+                        new String(is.readAllBytes(), StandardCharsets.UTF_8));
+                String tokenClientId = response.optString("client_id", "");
+                if (!tokenClientId.equals(clientId)) {
+                    System.out.println("[Auth] Token de otro clientId, " +
+                            "requiriendo nueva autorización.");
+                    return false;
+                }
+            }
+            return true;
         } catch (Exception e) {
             return false;
         }

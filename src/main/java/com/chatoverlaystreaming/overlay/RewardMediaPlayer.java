@@ -45,6 +45,7 @@ public class RewardMediaPlayer {
         boolean recursive  = rewardConfig.optBoolean("recursive", false);
         String playMode    = rewardConfig.optString("playMode", "random");
         double volume      = rewardConfig.optDouble("volume", 1.0);
+        System.out.println("[Media] Volumen: " + volume);
         int width          = rewardConfig.optInt("width", 480);
         int height         = rewardConfig.optInt("height", 270);
         int displayIndex   = rewardConfig.optInt("displayIndex", 0);
@@ -233,6 +234,8 @@ public class RewardMediaPlayer {
 
             if (chromaEnabled) {
                 overlay.setChroma(true, chromaColor, chromaTolerance);
+                System.out.println("[Media] Chroma activado: color=" + chromaColor
+                        + " tolerancia=" + chromaTolerance);
             }
 
             // Callback que VideoOverlay llama si hay error de reproducción

@@ -50,6 +50,7 @@ public class Config {
         return appDir.resolve("config.json");
     }
 
+    public boolean isTwitchEnabled() { return twitch.optBoolean("enabled", true); }
     public String getTwitchChannel()   { return twitch.optString("channel", "");   }
     public String getTwitchChannelId() { return twitch.optString("channelId", ""); }
     public String getTwitchClientId() { return twitch.optString("clientId", ""); }
@@ -67,6 +68,7 @@ public class Config {
     }
 
 
+    public boolean isYoutubeEnabled() { return youtube.optBoolean("enabled", true); }
     public String getYoutubeChannelId()  { return youtube.optString("channelId", "");  }
     public String getYoutubeVideoId()  { return youtube.optString("videoId", "");  }
     public String getYoutubeApiKey()   { return getYoutubeApiKeys().get(0);   }
@@ -196,6 +198,7 @@ public class Config {
     }
 
     public void saveAll(
+        boolean twitchEnabled, boolean youtubeEnabled,
         String twitchChannel, String twitchChannelId,
         String twitchClientId, String twitchClientSecret,
         String ytChannelId, String ytVideoId, List<String> apiKeys,
@@ -204,11 +207,18 @@ public class Config {
         boolean canClickLink, boolean loadBTTV,
         int messageTimeoutSeconds, boolean logActivity) throws IOException {
 
+
+        twitch.put("enabled", twitchEnabled);
         twitch.put("channel",       twitchChannel);
         twitch.put("channelId",     twitchChannelId);
-        twitch.put("clientId",      twitchClientId);
-        twitch.put("clientSecret",  twitchClientSecret);
+        if(getTwitchClientId() != twitchClientId || getTwitchClientSecret() != twitchClientSecret) {
+            twitch.put("clientId",      twitchClientId);
+            twitch.put("clientSecret",  twitchClientSecret);
+            twitch.put("accessToken",   "");
+            twitch.put("refreshToken",  "");
+        }
 
+        youtube.put("enabled", youtubeEnabled);
         youtube.put("channelId", ytChannelId);
         youtube.put("videoId",   ytVideoId);
         org.json.JSONArray keys = new org.json.JSONArray();

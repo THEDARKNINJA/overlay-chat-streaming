@@ -67,9 +67,9 @@ public class VideoOverlay extends JFrame implements VideoPlayerWindow {
         setSize(width, height);
 
         //setBackground(java.awt.Color.BLACK);
-setBackground(new java.awt.Color(0, 0, 0, 0));
-getRootPane().setOpaque(false);
-((JComponent) getContentPane()).setOpaque(false);
+        setBackground(new java.awt.Color(0, 0, 0, 0));
+        getRootPane().setOpaque(false);
+        ((JComponent) getContentPane()).setOpaque(false);
 
         setIconImage( new ImageIcon("icon.png").getImage() );
         positionOnScreen(posX, posY);
@@ -119,7 +119,7 @@ getRootPane().setOpaque(false);
             try {
                 Media media = new Media(videoFile.toUri().toString());
                 player = new MediaPlayer(media);
-                player.setVolume(volume);
+                player.setVolume(Math.max(0.0, Math.min(1.0, volume))); // clamp entre 0 y 1
 
                 MediaView mediaView = new MediaView(player);
                 mediaView.setFitWidth(WIDTH);
@@ -174,6 +174,7 @@ getRootPane().setOpaque(false);
                 };
 
                 player.setOnReady(() -> {
+                    player.setVolume(Math.max(0.0, Math.min(1.0, volume))); // clamp entre 0 y 1
                     if (onReadyCallback != null) onReadyCallback.run();
                     frameTimer.start();
                     player.play();
@@ -265,18 +266,23 @@ getRootPane().setOpaque(false);
 
         @Override
         protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
+            // Limpiar con transparencia antes de pintar el frame
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setComposite(AlphaComposite.Clear);
+            g2.fillRect(0, 0, getWidth(), getHeight());
+            g2.setComposite(AlphaComposite.SrcOver);
+
             BufferedImage frame = currentFrame.get();
             if (frame != null) {
-                // Escalar manteniendo proporción
-                double scaleX = (double) width  / frame.getWidth();
-                double scaleY = (double) height / frame.getHeight();
+                int drawW, drawH, drawX, drawY;
+                double scaleX = (double) getWidth()  / frame.getWidth();
+                double scaleY = (double) getHeight() / frame.getHeight();
                 double scale  = Math.min(scaleX, scaleY);
-                int drawW = (int)(frame.getWidth()  * scale);
-                int drawH = (int)(frame.getHeight() * scale);
-                int drawX = (width  - drawW) / 2;
-                int drawY = (height - drawH) / 2;
-                g.drawImage(frame, drawX, drawY, drawW, drawH, null);
+                drawW = (int)(frame.getWidth()  * scale);
+                drawH = (int)(frame.getHeight() * scale);
+                drawX = (getWidth()  - drawW) / 2;
+                drawY = (getHeight() - drawH) / 2;
+                g2.drawImage(frame, drawX, drawY, drawW, drawH, null);
             }
         }
 
@@ -289,13 +295,21 @@ getRootPane().setOpaque(false);
         }
 
         private BufferedImage applyChroma(BufferedImage src) {
-            // Convertir a ARGB para poder poner píxeles transparentes
-            BufferedImage result = new BufferedImage(
-                    src.getWidth(), src.getHeight(),
-                    BufferedImage.TYPE_INT_ARGB);
+            // Convertir a ARGB si no lo es ya
+            BufferedImage argbSrc;
+            if (src.getType() == BufferedImage.TYPE_INT_ARGB) {
+                argbSrc = src;
+            } else {
+                argbSrc = new BufferedImage(src.getWidth(), src.getHeight(),
+                        BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g = argbSrc.createGraphics();
+                g.drawImage(src, 0, 0, null);
+                g.dispose();
+            }
 
-            int[] pixels = src.getRGB(0, 0,
-                    src.getWidth(), src.getHeight(), null, 0, src.getWidth());
+            int[] pixels = argbSrc.getRGB(0, 0,
+                    argbSrc.getWidth(), argbSrc.getHeight(),
+                    null, 0, argbSrc.getWidth());
 
             for (int i = 0; i < pixels.length; i++) {
                 int pixel = pixels[i];
@@ -303,19 +317,21 @@ getRootPane().setOpaque(false);
                 int g = (pixel >>  8) & 0xFF;
                 int b =  pixel        & 0xFF;
 
-                // Distancia euclídea al color croma
                 double dist = Math.sqrt(
                         Math.pow(r - chromaR, 2) +
                         Math.pow(g - chromaG, 2) +
                         Math.pow(b - chromaB, 2));
 
                 if (dist <= chromaTolerance) {
-                    pixels[i] = 0x00000000; // transparente
+                    pixels[i] = 0x00000000; // completamente transparente
                 }
             }
 
-            result.setRGB(0, 0, src.getWidth(), src.getHeight(),
-                    pixels, 0, src.getWidth());
+            BufferedImage result = new BufferedImage(
+                    argbSrc.getWidth(), argbSrc.getHeight(),
+                    BufferedImage.TYPE_INT_ARGB);
+            result.setRGB(0, 0, argbSrc.getWidth(), argbSrc.getHeight(),
+                    pixels, 0, argbSrc.getWidth());
             return result;
         }
     }

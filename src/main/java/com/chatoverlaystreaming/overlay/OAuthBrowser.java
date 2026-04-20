@@ -13,6 +13,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -26,6 +27,8 @@ public class OAuthBrowser extends JDialog {
     private final Consumer<String> onError;   // callback con el error
     private final String           state;     // para verificar CSRF
     private final int              port;
+    private final java.util.concurrent.atomic.AtomicBoolean resultHandled = 
+        new AtomicBoolean(false);
 
     public OAuthBrowser(Window owner, String url, String state, int port,
                         Consumer<String> onCode, Consumer<String> onError) {
@@ -36,6 +39,7 @@ public class OAuthBrowser extends JDialog {
         this.port    = port;
 
         setSize(700, 550);
+        setIconImage( new ImageIcon("icon.png").getImage() );
         setLocationRelativeTo(owner);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
@@ -49,79 +53,148 @@ public class OAuthBrowser extends JDialog {
                 CefAppBuilder builder = new CefAppBuilder();
                 builder.getCefSettings().windowless_rendering_enabled = false;
                 cefApp = builder.build();
+            } else {
+                org.cef.network.CefCookieManager cookieManager = 
+                        org.cef.network.CefCookieManager.getGlobalManager();
+                if (cookieManager != null) {
+                    cookieManager.deleteCookies("", "");
+                }
             }
 
             client = cefApp.createClient();
+            browser = client.createBrowser(url, false, false);
+            Component browserUI = browser.getUIComponent();
 
-            // Interceptar la redirección a localhost
+            // Panel con OverlayLayout: browser debajo, loading encima
+            JPanel content = new JPanel();
+            content.setLayout(new OverlayLayout(content));
+
+            // Panel de loading encima (z-order superior)
+            JPanel loadingPanel = new JPanel(new BorderLayout());
+            loadingPanel.setBackground(new Color(14, 14, 16));
+            loadingPanel.setOpaque(true);
+            // Necesita ser opaco y estar al máximo tamaño
+            loadingPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+            loadingPanel.setAlignmentX(0.5f);
+            loadingPanel.setAlignmentY(0.5f);
+            JLabel loadingLabel = new JLabel(
+                    "Cargando, espere un momento...", SwingConstants.CENTER);
+            loadingLabel.setForeground(new Color(200, 140, 255));
+            loadingLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            loadingPanel.add(loadingLabel, BorderLayout.CENTER);
+
+            // El browser ocupa todo el espacio
+            JPanel browserWrapper = new JPanel(new BorderLayout());
+            browserWrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+            browserWrapper.setAlignmentX(0.5f);
+            browserWrapper.setAlignmentY(0.5f);
+            browserWrapper.add(browserUI, BorderLayout.CENTER);
+
+            // OverlayLayout pinta en orden inverso: primero browserWrapper, encima loadingPanel
+            content.add(loadingPanel);
+            content.add(browserWrapper);
+
             client.addLoadHandler(new CefLoadHandlerAdapter() {
                 @Override
-                public void onLoadStart(CefBrowser browser, CefFrame frame,
-                                        org.cef.network.CefRequest.TransitionType transitionType) {
-                    String loadUrl = browser.getURL();
-                    if (loadUrl != null && loadUrl.startsWith(
-                            "http://localhost:" + port)) {
-                        // Parsear parámetros
-                        String query = loadUrl.contains("?")
-                                ? loadUrl.substring(loadUrl.indexOf('?') + 1)
-                                : "";
-
-                        String code        = extractParam(query, "code");
-                        String errorParam  = extractParam(query, "error");
-                        String receivedState = extractParam(query, "state");
-
+                public void onLoadingStateChange(CefBrowser b, boolean isLoading,
+                                                boolean canGoBack,
+                                                boolean canGoForward) {
+                    if (!isLoading) {
+                        // Página cargada: ocultar el loading
                         SwingUtilities.invokeLater(() -> {
-                            if (code != null && state.equals(receivedState)) {
-                                onCode.accept(code);
-                            } else if (errorParam != null) {
-                                String desc = extractParam(query, "error_description");
-                                onError.accept(desc != null ? desc : errorParam);
-                            } else if (code != null) {
-                                onError.accept("State no coincide (posible CSRF).");
-                            }
-                            dispose();
+                            loadingPanel.setVisible(false);
+                            content.revalidate();
+                            content.repaint();
                         });
                     }
                 }
 
                 @Override
-                public void onLoadError(CefBrowser browser, CefFrame frame,
-                                        org.cef.handler.CefLoadHandler.ErrorCode errorCode,
-                                        String errorText, String failedUrl) {
-                    // Ignorar errores de la redirección a localhost
-                    // (el servidor HTTP puede no estar levantado en ese momento)
-                    if (failedUrl != null && failedUrl.startsWith(
-                            "http://localhost:" + port)) return;
+                public void onLoadStart(CefBrowser b, CefFrame frame,
+                                        org.cef.network.CefRequest.TransitionType tt) {
+                    String loadUrl = b.getURL();
+                    if (loadUrl == null) return;
 
                     SwingUtilities.invokeLater(() -> {
-                        onError.accept("Error cargando página: " + errorText);
-                        dispose();
+                        loadingPanel.setVisible(true);
+                        content.revalidate();
+                        content.repaint();
+                    });
+
+                    if (loadUrl.startsWith("http://localhost:" + port)) {
+                        String query = loadUrl.contains("?")
+                                ? loadUrl.substring(loadUrl.indexOf('?') + 1) : "";
+                        String code          = extractParam(query, "code");
+                        String errorParam    = extractParam(query, "error");
+                        String receivedState = extractParam(query, "state");
+
+                        SwingUtilities.invokeLater(() -> {
+                            if (code != null && state.equals(receivedState)) {
+                                handleResult(code, null);
+                            } else if (errorParam != null) {
+                                String desc = extractParam(query, "error_description");
+                                handleResult(null, desc != null ? desc : errorParam);
+                            } else {
+                                handleResult(null, "State no coincide.");
+                            }
+                        });
+                    }
+                }
+
+                @Override
+                public void onLoadError(CefBrowser b, CefFrame frame,
+                                        org.cef.handler.CefLoadHandler.ErrorCode errorCode,
+                                        String errorText, String failedUrl) {
+
+                    // Si el error es en localhost, es la redirección OAuth — leer los parámetros
+                    if (failedUrl != null && failedUrl.startsWith("http://localhost:" + port)) {
+                        String query = failedUrl.contains("?")
+                                ? failedUrl.substring(failedUrl.indexOf('?') + 1) : "";
+                        String code          = extractParam(query, "code");
+                        String errorParam    = extractParam(query, "error");
+                        String receivedState = extractParam(query, "state");
+
+                        SwingUtilities.invokeLater(() -> {
+                            if (code != null && state.equals(receivedState)) {
+                                handleResult(code, null);
+                            } else if (errorParam != null) {
+                                String desc = extractParam(query, "error_description");
+                                handleResult(null, desc != null ? desc : errorParam);
+                            } else if (code != null) {
+                                handleResult(null, "State no coincide.");
+                            } else {
+                                handleResult(null, "Respuesta OAuth no reconocida.");
+                            }
+                        });
+                        return;
+                    }
+
+                    // Ignorar ERR_ABORTED (redirecciones normales del navegador)
+                    if (errorCode == org.cef.handler.CefLoadHandler.ErrorCode.ERR_ABORTED) return;
+
+                    SwingUtilities.invokeLater(() -> {
+                        loadingPanel.setVisible(false);
+                        handleResult(null, "Error cargando página: " + errorText);
                     });
                 }
             });
 
-            browser = client.createBrowser(url, false, false);
-            Component browserUI = browser.getUIComponent();
+            // Panel exterior con BorderLayout para añadir el botón cancelar
+            JPanel outer = new JPanel(new BorderLayout());
+            outer.add(content, BorderLayout.CENTER);
 
-            JPanel content = new JPanel(new BorderLayout());
-            content.add(browserUI, BorderLayout.CENTER);
-
-            // Botón cancelar por si el usuario cierra sin autorizar
             JButton cancelBtn = new JButton("Cancelar");
-            cancelBtn.addActionListener(e -> {
-                onError.accept("El usuario canceló la autorización.");
-                dispose();
-            });
+            cancelBtn.addActionListener(e ->
+                handleResult(null, "El usuario canceló la autorización."));
             JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
             bottom.add(cancelBtn);
-            content.add(bottom, BorderLayout.SOUTH);
+            outer.add(bottom, BorderLayout.SOUTH);
 
-            setContentPane(content);
+            setContentPane(outer);
 
         } catch (Exception e) {
             System.err.println("[OAuthBrowser] Error inicializando JCEF: "
                     + e.getMessage());
-            // Fallback: abrir en navegador externo
             onError.accept("No se pudo abrir el navegador interno: "
                     + e.getMessage());
             dispose();
@@ -146,11 +219,22 @@ public class OAuthBrowser extends JDialog {
                             + ex.getMessage());
                 }
             }
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                handleResult(null, "El usuario cerró la ventana de autorización.");
+            }
         });
     }
-
+    
     @Override
     public void dispose() {
+        // Llamar handleResult con error si nadie lo hizo aún
+        // (por ejemplo si se cierra con la X de la ventana)
+        if (!resultHandled.get()) {
+            resultHandled.set(true);
+            // No llamar onError aquí porque dispose puede llamarse
+            // después de un resultado exitoso también
+        }
         if (browser != null) {
             browser.close(true);
             browser = null;
@@ -176,5 +260,15 @@ public class OAuthBrowser extends JDialog {
             }
         }
         return null;
+    }
+
+    private void handleResult(String code, String error) {
+        if (!resultHandled.compareAndSet(false, true)) return; // ya procesado
+        dispose();
+        if (code != null) {
+            onCode.accept(code);
+        } else {
+            onError.accept(error);
+        }
     }
 }
