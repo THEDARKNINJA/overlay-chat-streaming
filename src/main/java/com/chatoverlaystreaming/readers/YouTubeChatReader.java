@@ -30,6 +30,8 @@ public class YouTubeChatReader implements Runnable {
     private int currentKeyIndex = 0;
     private boolean quotaExceeded = false;
     private String resolvedVideoId = null;
+    private java.util.function.Consumer<String> onFatalError;
+    private boolean initialConnectionDone = false;
 
     public YouTubeChatReader(String channelId, String videoId, List<String> apiKeys,
                          BlockingQueue<ChatMessage> queue, Config config,
@@ -97,11 +99,20 @@ public class YouTubeChatReader implements Runnable {
                 if (liveChatId == null) {
                     liveChatId = resolveLiveChatId();
                     if (liveChatId == null) {
+                        if (!initialConnectionDone) {
+                            // Primera vez: fallo fatal, notificar y salir del hilo
+                             String msg = "YouTube: no se encontró ningún directo activo.";
+                            // postSystemMessage(msg);
+                            if (onFatalError != null) onFatalError.accept(msg);
+                            return; // salir del run(), no reintentar
+                        }
+                        // Después de la primera conexión exitosa: comportamiento normal
                         postSystemMessage("YouTube: no se encontró ningún directo activo. " +
-                                          "Reintentando en 3 minutos...");
+                                        "Reintentando en 3 minutos...");
                         sleep(RETRY_INTERVAL);
                         continue;
                     }
+                    initialConnectionDone = true; // primera conexión exitosa
                 }
 
                 readChat(liveChatId);
@@ -118,6 +129,13 @@ public class YouTubeChatReader implements Runnable {
                 sleep(RETRY_INTERVAL);
             } catch (Exception e) {
                 System.err.println("[YouTube] Error de conexión: " + e.getMessage());
+                if (!initialConnectionDone) {
+                    // Primera conexión: fallo fatal
+                    String msg = "YouTube: error de conexión — " + e.getMessage();
+                    postSystemMessage(msg);
+                    if (onFatalError != null) onFatalError.accept(msg);
+                    return;
+                }
                 postSystemMessage("YouTube: error de conexión. Reintentando en 3 minutos...");
                 sleep(RETRY_INTERVAL);
             }
@@ -369,5 +387,13 @@ public class YouTubeChatReader implements Runnable {
 
     private static class ChatEndedException extends RuntimeException  {
         ChatEndedException(String message) { super(message); }
+    }
+
+    public void setOnFatalError(java.util.function.Consumer<String> callback) {
+        this.onFatalError = callback;
+    }
+
+    public boolean isConnected() {
+        return initialConnectionDone;
     }
 }

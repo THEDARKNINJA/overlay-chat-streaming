@@ -59,7 +59,9 @@ public class RewardsPanel extends JDialog {
     private JPanel      videoPosRow;
     private JSpinner    videoPosXSpinner;
     private JSpinner    videoPosYSpinner;
+    private JCheckBox randomPosCheck;
     private JComboBox<Integer> fpsCombo;
+    private JPanel    fpsPanel;
         // Chroma
     private JCheckBox chromaCheck;
     private JButton   chromaColorBtn;
@@ -301,6 +303,21 @@ public class RewardsPanel extends JDialog {
         videoSizePanel.add(videoHeightSpinner);
         addFormRow(form, gbc, row++, "Tamaño vídeo:", videoSizePanel);
 
+        displayCombo = new JComboBox<>();
+        styleCombo(displayCombo);
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        GraphicsDevice[] screens = ge.getScreenDevices();
+        displayCombo.addItem("Pantalla principal (visible en OBS por captura de ventana)");
+        for (int i = 1; i < screens.length; i++) {
+            DisplayMode dm = screens[i].getDisplayMode();
+            displayCombo.addItem("Pantalla " + (i + 1) +
+                    " (" + dm.getWidth() + "x" + dm.getHeight() + ")");
+        }
+        JPanel displayPanel = new JPanel(new BorderLayout());
+        displayPanel.setBackground(BG);
+        displayPanel.add(displayCombo);
+        addFormRow(form, gbc, row++, "Reproducir en:", displayPanel);
+
         // BLOQUE POSICION DEL PANEL DE VIDEO
         // Panel de posición
         JPanel videoPosPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -315,6 +332,14 @@ public class RewardsPanel extends JDialog {
         videoPosPanel.add(videoPosXSpinner);
         videoPosPanel.add(styledLabel("  Y:"));
         videoPosPanel.add(videoPosYSpinner);
+        randomPosCheck = styledCheckBox("Posición aleatoria");
+        randomPosCheck.addActionListener(e -> {
+            boolean random = randomPosCheck.isSelected();
+            videoPosXSpinner.setEnabled(!random);
+            videoPosYSpinner.setEnabled(!random);
+        });
+        //addFormRow(form, gbc, row++, "", randomPosCheck);
+        videoPosPanel.add(randomPosCheck);
 
         // Hint de resolución que se actualiza al cambiar la pantalla
         JLabel resHint = styledLabel("");
@@ -324,8 +349,8 @@ public class RewardsPanel extends JDialog {
         // Actualizar hint y límites cuando cambia la pantalla o el tamaño
         Runnable updateLimits = () -> {
             int screenIdx = displayCombo.getSelectedIndex();
-            GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-            GraphicsDevice[] screens = ge.getScreenDevices();
+        //    GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        //    GraphicsDevice[] screens = ge.getScreenDevices();
             int targetIdx = (screenIdx > 0 && screenIdx < screens.length)
                     ? screenIdx : 0;
             Rectangle bounds = screens[targetIdx]
@@ -359,7 +384,10 @@ public class RewardsPanel extends JDialog {
         fpsCombo = new JComboBox<>(new Integer[]{30, 60});
         styleCombo(fpsCombo);
         fpsCombo.setSelectedItem(30);
-        addFormRow(form, gbc, row++, "FPS captura:", fpsCombo);
+        fpsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        fpsPanel.setBackground(BG);
+        fpsPanel.add(fpsCombo);
+        addFormRow(form, gbc, row++, "FPS captura:", fpsPanel);
 
         chromaPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         chromaPanel.setBackground(BG);
@@ -391,6 +419,7 @@ public class RewardsPanel extends JDialog {
         chromaPanel.add(chromaToleranceSpinner);
         addFormRow(form, gbc, row++, "Fondo croma:", chromaPanel);
 
+        /*
         // Pantalla de reproducción
         displayCombo = new JComboBox<>();
         styleCombo(displayCombo);
@@ -410,7 +439,7 @@ public class RewardsPanel extends JDialog {
         displayPanel.setBackground(BG);
         displayPanel.add(displayCombo);
         addFormRow(form, gbc, row++, "Reproducir en:", displayPanel);
-
+ */
 
 
         // Mostrar/ocultar tamaño según tipo seleccionado
@@ -419,19 +448,25 @@ public class RewardsPanel extends JDialog {
                 boolean isVideo = "video".equals(typeCombo.getSelectedItem());
                 videoSizePanel.setVisible(isVideo);
                 videoPosRow.setVisible(isVideo);
+                displayCombo.setVisible(isVideo);
                 displayPanel.setVisible(isVideo);
                 videoTitleField.setVisible(isVideo);
-                fpsCombo.setVisible(isVideo);
+                fpsPanel.setVisible(isVideo);
                 chromaPanel.setVisible(isVideo);
+                randomPosCheck.setVisible(isVideo);
+                form.revalidate();
+                form.repaint();
                 pack();
             }
         });
+        /*
         videoSizePanel.setVisible(false); // oculto por defecto
         videoPosRow.setVisible(false);
         displayPanel.setVisible(false);
         videoTitleField.setVisible(false);
         fpsCombo.setVisible(false);
         chromaPanel.setVisible(false);
+         */
 
         // Carpeta
         /*
@@ -550,15 +585,22 @@ public class RewardsPanel extends JDialog {
                 chromaColorPreview.setBackground(chromaColor);
                 chromaToleranceSpinner.setValue(rewardConfig.optInt("chromaTolerance", 40));
 
+                boolean randomPos = rewardConfig.optBoolean("randomPos", false);
+                randomPosCheck.setSelected(randomPos);
+
+                displayCombo.setVisible(true);
                 videoSizePanel.setVisible(true);
                 videoPosRow.setVisible(true);
+                randomPosCheck.setSelected(true);
                 videoTitleField.setVisible(true);
-                fpsCombo.setVisible(true);
+                fpsPanel.setVisible(true);
                 chromaPanel.setVisible(true);
             } else {
+                displayCombo.setVisible(false);
+                randomPosCheck.setSelected(false);
                 videoSizePanel.setVisible(false);
                 videoTitleField.setVisible(false);
-                fpsCombo.setVisible(false);
+                fpsPanel.setVisible(false);
                 chromaPanel.setVisible(false);
             }
             int displayIndex = rewardConfig.optInt("displayIndex", 0);
@@ -592,16 +634,21 @@ public class RewardsPanel extends JDialog {
         videoHeightSpinner.setValue(270);
         videoSizePanel.setVisible(false);
         videoPosRow.setVisible(false);
+        randomPosCheck.setSelected(false);
+        randomPosCheck.setVisible(false);
         videoPosXSpinner.setValue(0);
         videoPosYSpinner.setValue(0);
         chromaPanel.setVisible(false);
         videoTitleField.setText("OverlayVideo");
+        videoTitleField.setVisible(false);
         fpsCombo.setSelectedItem(60);
+        fpsPanel.setVisible(false);
         chromaCheck.setSelected(false);
         chromaColor = new Color(0, 255, 0);
         chromaColorPreview.setBackground(chromaColor);
         chromaToleranceSpinner.setValue(40);
         displayCombo.setSelectedIndex(0);
+        displayCombo.setVisible(false);
     }
 
     private void browsePath() {
@@ -691,6 +738,7 @@ public class RewardsPanel extends JDialog {
                         rewardConfig.put("width",  vidWidth);
                         rewardConfig.put("height", vidHeight);
                         rewardConfig.put("displayIndex", displayIndex);
+                        rewardConfig.put("randomPos", randomPosCheck.isSelected());
                         rewardConfig.put("posX", videoPosXSpinner.getValue());
                         rewardConfig.put("posY", videoPosYSpinner.getValue());
                         rewardConfig.put("fps", fpsCombo.getSelectedItem());

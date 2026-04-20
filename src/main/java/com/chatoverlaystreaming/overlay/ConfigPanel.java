@@ -24,11 +24,13 @@ public class ConfigPanel extends JDialog {
     private JTextField twitchChannelIdField;
     private JTextField twitchClientIdField;
     private JPasswordField twitchClientSecretField;
+    private JCheckBox twitchEnabledCheck;
 
     // YouTube
     private JTextField youtubeChannelIdField;
     private JTextField youtubeVideoIdField;
     private JTextArea  youtubeApiKeysField;
+    private JCheckBox youtubeEnabledCheck;
 
     // Panel
     private JSpinner  alphaSpinner;
@@ -134,14 +136,34 @@ public class ConfigPanel extends JDialog {
     }
 
     private JPanel buildTwitchSection() {
+        twitchEnabledCheck = createCheckBox("Twitch habilitado");
+        twitchEnabledCheck.setSelected(config.isTwitchEnabled());
         JPanel panel = createSection("Twitch");
         GridBagConstraints gbc = createGbc();
         int row = 0;
+        gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+        panel.add(twitchEnabledCheck, gbc);
+        gbc.gridwidth = 1;
 
         twitchChannelField    = createTextField(20);
         twitchChannelIdField  = createTextField(20);
         twitchClientIdField   = createTextField(20);
         twitchClientSecretField = createPasswordField(20);
+
+        // Listener para mostrar/ocultar campos cuando se deshabilita
+        twitchEnabledCheck.addActionListener(e -> {
+            boolean enabled = twitchEnabledCheck.isSelected();
+            twitchChannelField.setEnabled(enabled);
+            twitchChannelIdField.setEnabled(enabled);
+            twitchClientIdField.setEnabled(enabled);
+            twitchClientSecretField.setEnabled(enabled);
+        });
+        // Estado inicial
+        boolean twitchOn = config.isTwitchEnabled();
+        twitchChannelField.setEnabled(twitchOn);
+        twitchChannelIdField.setEnabled(twitchOn);
+        twitchClientIdField.setEnabled(twitchOn);
+        twitchClientSecretField.setEnabled(twitchOn);
 
         addRow(panel, gbc, row++, "Canal:",         twitchChannelField);
         addRow(panel, gbc, row++, "ID Canal:",       twitchChannelIdField);
@@ -152,9 +174,14 @@ public class ConfigPanel extends JDialog {
     }
 
     private JPanel buildYouTubeSection() {
+        youtubeEnabledCheck = createCheckBox("YouTube habilitado");
+        youtubeEnabledCheck.setSelected(config.isYoutubeEnabled());
         JPanel panel = createSection("YouTube");
         GridBagConstraints gbc = createGbc();
         int row = 0;
+        gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+        panel.add(youtubeEnabledCheck, gbc);
+        gbc.gridwidth = 1;
 
         youtubeChannelIdField = createTextField(20);
         youtubeVideoIdField   = createTextField(20);
@@ -173,6 +200,17 @@ public class ConfigPanel extends JDialog {
         keysScroll.setBackground(BG2);
         keysScroll.getViewport().setBackground(BG2);
         keysScroll.setBorder(null);
+
+        youtubeEnabledCheck.addActionListener(e -> {
+            boolean enabled = youtubeEnabledCheck.isSelected();
+            youtubeChannelIdField.setEnabled(enabled);
+            youtubeVideoIdField.setEnabled(enabled);
+            youtubeApiKeysField.setEnabled(enabled);
+        });
+        boolean youtubeOn = config.isYoutubeEnabled();
+        youtubeChannelIdField.setEnabled(youtubeOn);
+        youtubeVideoIdField.setEnabled(youtubeOn);
+        youtubeApiKeysField.setEnabled(youtubeOn);
 
         addRow(panel, gbc, row++, "ID Canal:", youtubeChannelIdField);
         addRow(panel, gbc, row++, "Video ID:", youtubeVideoIdField);
@@ -266,6 +304,17 @@ public class ConfigPanel extends JDialog {
     private void onSave() {
         try {
             // Recoger valores
+            boolean twitchEnabled  = twitchEnabledCheck.isSelected();
+            boolean youtubeEnabled = youtubeEnabledCheck.isSelected();
+            if (twitchEnabled && twitchChannelField.getText().trim().isBlank()) {
+                showError("El canal de Twitch es obligatorio si Twitch está habilitado.");
+                return;
+            }
+            if (youtubeEnabled && youtubeChannelIdField.getText().trim().isBlank()) {
+                showError("El ID de canal de YouTube es obligatorio si YouTube está habilitado.");
+                return;
+            }
+
             String twitchChannel    = twitchChannelField.getText().trim();
             String twitchChannelId  = twitchChannelIdField.getText().trim();
             String twitchClientId   = twitchClientIdField.getText().trim();
@@ -299,6 +348,7 @@ public class ConfigPanel extends JDialog {
 
             // Guardar
             config.saveAll(
+                twitchEnabled, youtubeEnabled,
                 twitchChannel, twitchChannelId, twitchClientId, twitchSecret,
                 ytChannelId, ytVideoId, apiKeys,
                 alpha, showBg, iconSize,

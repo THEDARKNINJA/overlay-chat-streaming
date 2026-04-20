@@ -1,1 +1,1 @@
-java.base,java.compiler,java.management,java.naming,java.net.http,java.security.jgss,java.sql,jdk.httpserver,jdk.jfr,jdk.unsupported,jdk.unsupported.desktop
+java.base,java.compiler,java.management,java.naming,java.net.http,java.security.jgss,java.sql,jdk.jfr,jdk.unsupported,jdk.unsupported.desktop
