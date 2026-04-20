@@ -51,7 +51,7 @@ public class VideoOverlay extends JFrame implements VideoPlayerWindow {
          */
 
     public VideoOverlay(Path videoFile, double volume,
-                        int width, int height, int displayIndex, int fps, String windowTitle, int posX, int posY) {
+                        int width, int height, int displayIndex, int fps, String windowTitle, int posX, int posY, boolean randomPos) {
         this.videoFile    = videoFile;
         this.volume       = volume;
         this.WIDTH        = width;
@@ -72,7 +72,7 @@ public class VideoOverlay extends JFrame implements VideoPlayerWindow {
         ((JComponent) getContentPane()).setOpaque(false);
 
         setIconImage( new ImageIcon("icon.png").getImage() );
-        positionOnScreen(posX, posY);
+        positionOnScreen(posX, posY, randomPos);
         setFocusableWindowState(false);
         setAutoRequestFocus(false);
 
@@ -80,7 +80,7 @@ public class VideoOverlay extends JFrame implements VideoPlayerWindow {
         add(videoPanel, BorderLayout.CENTER);
     }
 
-    private void positionOnScreen(int posX, int posY) {
+    private void positionOnScreen(int posX, int posY, boolean randomPos) {
         GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
         GraphicsDevice[] screens = ge.getScreenDevices();
 
@@ -96,18 +96,19 @@ public class VideoOverlay extends JFrame implements VideoPlayerWindow {
         Rectangle bounds = screens[targetIndex]
                 .getDefaultConfiguration().getBounds();
 
+        int absX, absY;
         // Posición relativa a la pantalla elegida
-        int absX = bounds.x + posX;
-        int absY = bounds.y + posY;
-
-        // Asegurarse de que no se sale de la pantalla
-        absX = Math.max(bounds.x,
-            Math.min(absX, bounds.x + bounds.width  - WIDTH));
-        absY = Math.max(bounds.y,
-            Math.min(absY, bounds.y + bounds.height - HEIGHT));
-
-        if (absX != bounds.x + posX || absY != bounds.y + posY) {
-            System.out.println("[Video] Posición ajustada para no salirse de pantalla.");
+        // fijar posición según si random o no, Asegurarse de que no se sale de la pantalla
+        if (randomPos) {
+            int maxX = Math.max(0, bounds.width  - WIDTH);
+            int maxY = Math.max(0, bounds.height - HEIGHT);
+            absX = bounds.x + new java.util.Random().nextInt(maxX + 1);
+            absY = bounds.y + new java.util.Random().nextInt(maxY + 1);
+        } else {
+            absX = bounds.x + posX;
+            absY = bounds.y + posY;
+            absX = Math.max(bounds.x, Math.min(absX, bounds.x + bounds.width  - WIDTH));
+            absY = Math.max(bounds.y, Math.min(absY, bounds.y + bounds.height - HEIGHT));
         }
 
         setLocation(absX, absY);
