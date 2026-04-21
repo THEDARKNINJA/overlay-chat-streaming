@@ -227,7 +227,7 @@ public class RewardMediaPlayer {
             if (VlcjDetector.isAvailable()) {
                 overlay = new VlcjVideoOverlay(file, volume, width, height,
                                                 displayIndex, fps, windowTitle, vidPosX, vidPosY, randomPos);
-            } else {                       
+            } else {
 	            ensureFX();
                 overlay = new VideoOverlay(file, volume, width, height,
                                             displayIndex, fps, windowTitle, vidPosX, vidPosY, randomPos);

@@ -67,6 +67,7 @@ public class ChatOverlay extends JFrame {
     private JLabel   youtubeViewersLabel;
     private JButton  twitchConnectBtn;
     private JButton  youtubeConnectBtn;
+    private ViewerCountService viewerCountService;
     private static final String CARD_VIEWERS = "viewers";
     private static final String CARD_BUTTON  = "button";
 
@@ -540,6 +541,7 @@ public class ChatOverlay extends JFrame {
             setupTrayIcon();
         } */
 
+            /*
         if (config.getShowViewerCount()) {
             ViewerCountService viewerService = new ViewerCountService(
                 config,
@@ -550,6 +552,7 @@ public class ChatOverlay extends JFrame {
             );
             viewerService.start();
         }
+             */
 
         // Visibilidad botón recompensas con/sin focus
         addWindowFocusListener(new java.awt.event.WindowFocusListener() {
@@ -1192,5 +1195,25 @@ public class ChatOverlay extends JFrame {
         if (hasFocus) {
             rewardsButton.setVisible(true);
         }
+    }
+
+    public void setViewerCountService(ViewerCountService service) {
+        this.viewerCountService = service;
+    }
+
+    public void startTwitchViewers() {
+        if (viewerCountService != null) viewerCountService.startTwitch();
+    }
+
+    public void startYoutubeViewers() {
+        if (viewerCountService != null) viewerCountService.startYoutube();
+    }
+
+    public void setTwitchViewersLabel(String count) {
+        twitchViewersLabel.setText(count);
+    }
+
+    public void setYoutubeViewersLabel(String count) {
+        youtubeViewersLabel.setText(count);
     }
 }

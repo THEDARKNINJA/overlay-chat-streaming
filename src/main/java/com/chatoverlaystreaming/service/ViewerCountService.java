@@ -42,7 +42,13 @@ public class ViewerCountService {
 
     public void start() {
         // Hilo para Twitch
-        Thread twitchThread = new Thread(() -> {
+        startTwitch();
+        // Hilo para YouTube
+        startYoutube();
+    }
+
+    public void startTwitch() {
+        Thread t = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     String count = fetchTwitchViewers();
@@ -54,11 +60,12 @@ public class ViewerCountService {
                 sleep(twitch_interval);
             }
         }, "twitch-viewers");
-        twitchThread.setDaemon(true);
-        twitchThread.start();
+        t.setDaemon(true);
+        t.start();
+    }
 
-        // Hilo para YouTube
-        Thread youtubeThread = new Thread(() -> {
+    public void startYoutube() {
+        Thread t = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     String count = fetchYoutubeViewers();
@@ -70,8 +77,8 @@ public class ViewerCountService {
                 sleep(youtube_interval);
             }
         }, "youtube-viewers");
-        youtubeThread.setDaemon(true);
-        youtubeThread.start();
+        t.setDaemon(true);
+        t.start();
     }
 
     /**

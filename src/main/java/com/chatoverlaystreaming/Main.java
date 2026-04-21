@@ -8,6 +8,7 @@ import com.chatoverlaystreaming.overlay.TwitchAuth;
 import com.chatoverlaystreaming.readers.TwitchChatReader;
 import com.chatoverlaystreaming.readers.TwitchEventSub;
 import com.chatoverlaystreaming.readers.YouTubeChatReader;
+import com.chatoverlaystreaming.service.ViewerCountService;
 
 import javafx.embed.swing.JFXPanel;
 import javafx.scene.paint.Color;
@@ -76,8 +77,20 @@ public class Main {
                         new ImageIcon("icon.png").getImage()
                     );
 
-            boolean twitchWasOk  = finalConfig.getLastConnectionSuccess("twitch");
-            boolean youtubeWasOk = finalConfig.getLastConnectionSuccess("youtube");
+            ViewerCountService viewerService;
+            if (finalConfig.getShowViewerCount()) {
+                viewerService = new ViewerCountService(
+                    finalConfig,
+                    count -> SwingUtilities.invokeLater(() ->
+                        overlay.setTwitchViewersLabel(count)),
+                    count -> SwingUtilities.invokeLater(() ->
+                        overlay.setYoutubeViewersLabel(count))
+                );
+                overlay.setViewerCountService(viewerService);
+            }
+
+        //    boolean twitchWasOk  = finalConfig.getLastConnectionSuccess("twitch");
+        //    boolean youtubeWasOk = finalConfig.getLastConnectionSuccess("youtube");
 
             // Configurar los botones de reconexión manual
             if (finalConfig.isTwitchEnabled()) {
@@ -187,6 +200,7 @@ public class Main {
                 SwingUtilities.invokeLater(() -> {
                     overlay.appendSystemMessage("✔ Conectado al chat de Twitch.");
                     overlay.showTwitchViewers();
+                    overlay.startTwitchViewers();
                 });
             } else {
                 // Modo anónimo: mostrar botón naranja para reintentar OAuth
@@ -290,6 +304,7 @@ public class Main {
                         SwingUtilities.invokeLater(() -> {
                             overlay.appendSystemMessage("✔ Conectado al chat de YouTube.");
                             overlay.showYoutubeViewers();
+                            overlay.startYoutubeViewers();
                         });
                         return;
                     }
