@@ -30,6 +30,7 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
     private volatile int     chromaG        = 255;
     private volatile int     chromaB        = 0;
     private volatile int     chromaTolerance = 40;
+    private volatile Color chromaColorObj = new Color(0, 255, 0);
 
     private Runnable         onReadyCallback;
     private Consumer<String> onErrorCallback;
@@ -60,9 +61,13 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setFocusableWindowState(false);
         setAutoRequestFocus(false);
-        setBackground(new Color(0, 0, 0, 0));
-        getRootPane().setOpaque(false);
-        ((JComponent) getContentPane()).setOpaque(false);
+        //setBackground(Color.BLACK);
+        //getRootPane().setOpaque(false);
+        //((JComponent) getContentPane()).setOpaque(false);
+setBackground(chromaColorObj);
+getRootPane().setOpaque(true);
+((JComponent) getContentPane()).setOpaque(true);
+getContentPane().setBackground(chromaColorObj);
         setSize(width, height);
 
         positionOnScreen(posX, posY, randomPos);
@@ -107,6 +112,7 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
 
     @Override
     public void play() {
+        VlcjVideoOverlay self = this;
         // Preparar buffer de renderizado al tamaño del panel
         renderImage  = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_ARGB);
         renderPixels = ((DataBufferInt) renderImage.getRaster()
@@ -144,10 +150,19 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
                     // RV32 viene como BGRA, necesitamos ARGB
                     for (int i = 0; i < renderPixels.length; i++) {
                         int px = renderPixels[i];
+                        /*
                         int b = (px >> 16) & 0xFF;
                         int g = (px >>  8) & 0xFF;
                         int r =  px        & 0xFF;
                         dst[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+                         */
+                        // RV32 de vlcj = BGR almacenado como int little-endian
+                        // los bytes en memoria son: B G R X (X = ignorado)
+                        // al leerlo como int en Java (big-endian): 0x00RRGGBB no, sino:
+                        // int = (X << 24) | (R << 16) | (G << 8) | B  ← así llega de vlcj
+                        // necesitamos ARGB = (FF << 24) | (R << 16) | (G << 8) | B
+                        // es decir, solo poner el alpha a FF, el resto ya está en orden correcto
+                        dst[i] = 0xFF000000 | (px & 0x00FFFFFF);
                     }
                 }
 
@@ -178,6 +193,12 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
                 System.out.println("[vlcj] Volumen aplicado: " + vlcVolume + "%");
                 if (onReadyCallback != null) {
                     SwingUtilities.invokeLater(onReadyCallback::run);
+                }
+                if (chromaEnabled) {
+                    SwingUtilities.invokeLater(() -> {
+                        getContentPane().setBackground(chromaColorObj);
+                        self.applyWindowColorKey(chromaColorObj);
+                    });
                 }
             }
 
@@ -234,10 +255,15 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
                           + Math.pow(b - chromaB, 2);
 
             if (distSq <= tolSq) {
-                dstPixels[i] = 0x00000000; // transparente
+                // dstPixels[i] = 0x00000000; // transparente
+                dstPixels[i] = 0xFF000000
+                        | (chromaR << 16)
+                        | (chromaG <<  8)
+                        |  chromaB;
             } else {
                 // Reordenar a ARGB
-                dstPixels[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+                // dstPixels[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+                dstPixels[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
             }
         }
 
@@ -247,6 +273,7 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
     @Override
     public void setChroma(boolean enabled, Color color, int tolerance) {
         this.chromaEnabled   = enabled;
+        this.chromaColorObj  = color;
         this.chromaR         = color.getRed();
         this.chromaG         = color.getGreen();
         this.chromaB         = color.getBlue();
@@ -285,10 +312,11 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
     private static class FramePanel extends JPanel {
 
         private volatile BufferedImage currentFrame;
+        private volatile Color chromaColorObj = new Color(0, 255, 0);
 
         FramePanel(int width, int height) {
             setOpaque(false);
-            setBackground(new Color(0, 0, 0, 0));
+setBackground(Color.BLACK);
             setPreferredSize(new Dimension(width, height));
         }
 
@@ -301,10 +329,11 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g;
             // Limpiar con transparencia
-            g2.setComposite(AlphaComposite.Clear);
+            //g2.setComposite(AlphaComposite.Clear);
             g2.fillRect(0, 0, getWidth(), getHeight());
-            g2.setComposite(AlphaComposite.SrcOver);
-
+           // g2.setComposite(AlphaComposite.SrcOver);
+g2.setColor(chromaColorObj);
+           
             BufferedImage frame = currentFrame;
             if (frame != null) {
                 double scaleX = (double) getWidth()  / frame.getWidth();
@@ -318,6 +347,33 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
                         RenderingHints.VALUE_INTERPOLATION_BILINEAR);
                 g2.drawImage(frame, drawX, drawY, drawW, drawH, null);
             }
+        }
+    }
+    public void applyWindowColorKey(Color keyColor) {
+        try {
+            com.sun.jna.Pointer pointer =
+                    com.sun.jna.Native.getComponentPointer(this);
+            if (pointer == null) return;
+            com.sun.jna.platform.win32.WinDef.HWND hwnd =
+                    new com.sun.jna.platform.win32.WinDef.HWND(pointer);
+
+            int GWL_EXSTYLE   = -20;
+            int WS_EX_LAYERED = 0x00080000;
+            int style = com.sun.jna.platform.win32.User32.INSTANCE
+                    .GetWindowLong(hwnd, GWL_EXSTYLE);
+            style |= WS_EX_LAYERED;
+            com.sun.jna.platform.win32.User32.INSTANCE
+                    .SetWindowLong(hwnd, GWL_EXSTYLE, style);
+
+            // Construir el color key en formato 0x00BBGGRR que usa Windows
+            int winColor = (keyColor.getBlue()  << 16)
+                        | (keyColor.getGreen() <<  8)
+                        |  keyColor.getRed();
+
+            WindowClickThrough.User32Extra.INSTANCE
+                    .SetLayeredWindowAttributes(hwnd, winColor, (byte) 255, 0x1);
+        } catch (Exception e) {
+            System.err.println("[vlcj] Error aplicando color key: " + e.getMessage());
         }
     }
 }

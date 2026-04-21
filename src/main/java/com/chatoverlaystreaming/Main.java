@@ -4,6 +4,7 @@ import com.chatoverlaystreaming.emotes.ImageCache;
 import com.chatoverlaystreaming.model.ChatMessage;
 import com.chatoverlaystreaming.overlay.ChatOverlay;
 import com.chatoverlaystreaming.overlay.Config;
+import com.chatoverlaystreaming.overlay.ObsAwareDialog;
 import com.chatoverlaystreaming.overlay.TwitchAuth;
 import com.chatoverlaystreaming.readers.TwitchChatReader;
 import com.chatoverlaystreaming.readers.TwitchEventSub;
@@ -14,6 +15,9 @@ import javafx.embed.swing.JFXPanel;
 import javafx.scene.paint.Color;
 
 import javax.swing.*;
+
+import org.json.JSONObject;
+
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -146,6 +150,49 @@ public class Main {
             }
             */
         });
+
+        // Al final de main(), después de lanzar la UI:
+        Thread.ofVirtual().name("update-checker").start(() -> {
+            try {
+                Thread.sleep(5000); // esperar a que la app esté lista
+                JSONObject release = Updater.checkForUpdate();
+                if (release != null) {
+                    String version = release.getString("tag_name");
+                    SwingUtilities.invokeLater(() -> {
+                        int choice = ObsAwareDialog.showConfirm(
+                            null,
+                            "Hay una nueva versión disponible: " + version +
+                            "\n¿Descargar e instalar ahora?\n" +
+                            "(La aplicación se reiniciará automáticamente)",
+                            "Actualización disponible",
+                            javax.swing.JOptionPane.YES_NO_OPTION
+                        );
+                        if (choice == javax.swing.JOptionPane.YES_OPTION) {
+                            Thread.ofVirtual().start(() -> {
+                                try {
+                                    Updater.downloadAndApply(release, null);
+                                } catch (Exception e) {
+                                    System.err.println("[Updater] Error: "
+                                            + e.getMessage());
+                                    SwingUtilities.invokeLater(() ->
+                                        ObsAwareDialog.showMessage(null,
+                                            "Error descargando la actualización:\n"
+                                            + e.getMessage(),
+                                            "Error",
+                                            javax.swing.JOptionPane.ERROR_MESSAGE));
+                                }
+                            });
+                        }
+                    });
+                } else {
+                    System.out.println("[Updater] La aplicación está actualizada.");
+                }
+            } catch (Exception e) {
+                System.err.println("[Updater] Error comprobando actualización: "
+                        + e.getMessage());
+            }
+        });
+
     }
 
     private static void connectTwitch(Config config,

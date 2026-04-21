@@ -62,6 +62,9 @@ if exist "youtube_unicode_chars.json" copy "youtube_unicode_chars.json" "%INPUT_
 if exist "icon.ico" copy "icon.ico" "%INPUT_DIR%\"
 if exist "icon.png" copy "icon.png" "%INPUT_DIR%\"
 
+:: si existe el archivo de version
+if exist "version.txt" copy "version.txt" "%INPUT_DIR%\"
+
 :: =========================
 :: DETECTAR MODULOS (jdeps)
 :: =========================
@@ -138,6 +141,8 @@ copy /Y "youtube_unicode_chars.json" "%OUTPUT_DIR%\ChatOverlay\youtube_unicode_c
 
 copy /Y "icon.ico" "%OUTPUT_DIR%\ChatOverlay\icon.ico"
 copy /Y "icon.png" "%OUTPUT_DIR%\ChatOverlay\icon.png"
+
+copy /Y "version.txt" "%OUTPUT_DIR%\ChatOverlay\version.txt"
 
 if exist "youtube_emojis" (
     xcopy /E /I /Y "youtube_emojis" "%OUTPUT_DIR%\ChatOverlay\youtube_emojis" >nul

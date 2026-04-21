@@ -39,6 +39,7 @@ com\chatoverlaystreaming\overlay\Config.class
 com\chatoverlaystreaming\overlay\VlcjVideoOverlay$2.class
 com\chatoverlaystreaming\overlay\VlcjDetector.class
 com\chatoverlaystreaming\overlay\VideoOverlay.class
+com\chatoverlaystreaming\Updater.class
 com\chatoverlaystreaming\model\EmoteToken.class
 com\chatoverlaystreaming\overlay\VideoOverlay$VideoPanel.class
 com\chatoverlaystreaming\readers\YouTubeChatReader$ChatEndedException.class
