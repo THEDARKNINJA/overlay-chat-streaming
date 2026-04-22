@@ -64,10 +64,16 @@ public class VlcjVideoOverlay extends JFrame implements VideoPlayerWindow {
         //setBackground(Color.BLACK);
         //getRootPane().setOpaque(false);
         //((JComponent) getContentPane()).setOpaque(false);
+        /*
 setBackground(chromaColorObj);
 getRootPane().setOpaque(true);
 ((JComponent) getContentPane()).setOpaque(true);
 getContentPane().setBackground(chromaColorObj);
+*/
+setBackground(new Color(0, 0, 0, 0));
+getRootPane().setOpaque(false);
+((JComponent) getContentPane()).setOpaque(false);
+getContentPane().setBackground(new Color(0, 0, 0, 0));
         setSize(width, height);
 
         positionOnScreen(posX, posY, randomPos);
@@ -149,13 +155,13 @@ getContentPane().setBackground(chromaColorObj);
                             .getDataBuffer()).getData();
                     // RV32 viene como BGRA, necesitamos ARGB
                     for (int i = 0; i < renderPixels.length; i++) {
-                        int px = renderPixels[i];
                         /*
+                        int px = renderPixels[i];
                         int b = (px >> 16) & 0xFF;
                         int g = (px >>  8) & 0xFF;
                         int r =  px        & 0xFF;
-                        dst[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
-                         */
+                        //dst[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+                        dst[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
                         // RV32 de vlcj = BGR almacenado como int little-endian
                         // los bytes en memoria son: B G R X (X = ignorado)
                         // al leerlo como int en Java (big-endian): 0x00RRGGBB no, sino:
@@ -163,6 +169,8 @@ getContentPane().setBackground(chromaColorObj);
                         // necesitamos ARGB = (FF << 24) | (R << 16) | (G << 8) | B
                         // es decir, solo poner el alpha a FF, el resto ya está en orden correcto
                         dst[i] = 0xFF000000 | (px & 0x00FFFFFF);
+                         */
+                        dst[i] = 0xFF000000 | (renderPixels[i] & 0x00FFFFFF);
                     }
                 }
 
@@ -197,7 +205,6 @@ getContentPane().setBackground(chromaColorObj);
                 if (chromaEnabled) {
                     SwingUtilities.invokeLater(() -> {
                         getContentPane().setBackground(chromaColorObj);
-                        self.applyWindowColorKey(chromaColorObj);
                     });
                 }
             }
@@ -242,18 +249,30 @@ getContentPane().setBackground(chromaColorObj);
                 .getDataBuffer()).getData();
 
         double tolSq = (double) chromaTolerance * chromaTolerance;
-
+// En applyChroma, al principio, solo loguear los primeros 5 píxeles únicos:
+if (java.util.concurrent.ThreadLocalRandom.current().nextInt(100) == 0) {
+    System.err.println("[Chroma] chromaRGB=(" + chromaR + "," + chromaG + "," + chromaB + ")"
+        + " tolSq=" + tolSq
+        + " pixel0=(" + ((srcPixels[0]>>16)&0xFF) + ","
+                      + ((srcPixels[0]>>8)&0xFF) + ","
+                      + (srcPixels[0]&0xFF) + ")"
+        + " pixel1=(" + ((srcPixels[1]>>16)&0xFF) + ","
+                      + ((srcPixels[1]>>8)&0xFF) + ","
+                      + (srcPixels[1]&0xFF) + ")");
+}
         for (int i = 0; i < srcPixels.length; i++) {
             // RV32 viene en formato BGRA desde vlcj
             int px = srcPixels[i];
             int b  = (px >> 16) & 0xFF;
             int g  = (px >>  8) & 0xFF;
             int r  =  px        & 0xFF;
+            dstPixels[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
 
             double distSq = Math.pow(r - chromaR, 2)
                           + Math.pow(g - chromaG, 2)
                           + Math.pow(b - chromaB, 2);
 
+                          /*
             if (distSq <= tolSq) {
                 // dstPixels[i] = 0x00000000; // transparente
                 dstPixels[i] = 0xFF000000
@@ -263,8 +282,15 @@ getContentPane().setBackground(chromaColorObj);
             } else {
                 // Reordenar a ARGB
                 // dstPixels[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
-                dstPixels[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
+            //dstPixels[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
+            dstPixels[i] = 0xFF000000 | (px & 0x00FFFFFF);
             }
+            */
+           if (distSq <= tolSq) {
+    dstPixels[i] = 0x00000000; // transparente real
+} else {
+    dstPixels[i] = 0xFF000000 | (px & 0x00FFFFFF);
+}
         }
 
         return result;
@@ -312,11 +338,14 @@ getContentPane().setBackground(chromaColorObj);
     private static class FramePanel extends JPanel {
 
         private volatile BufferedImage currentFrame;
-        private volatile Color chromaColorObj = new Color(0, 255, 0);
+        private volatile Color chromaColorObj = Color.GREEN;
+        volatile boolean chromaEnabled;
+        
 
         FramePanel(int width, int height) {
+            this.chromaEnabled = chromaEnabled;
             setOpaque(false);
-setBackground(Color.BLACK);
+setBackground(new Color(0, 0, 0, 0));
             setPreferredSize(new Dimension(width, height));
         }
 
@@ -325,6 +354,7 @@ setBackground(Color.BLACK);
             SwingUtilities.invokeLater(this::repaint);
         }
 
+        /*
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g;
@@ -332,7 +362,9 @@ setBackground(Color.BLACK);
             //g2.setComposite(AlphaComposite.Clear);
             g2.fillRect(0, 0, getWidth(), getHeight());
            // g2.setComposite(AlphaComposite.SrcOver);
-g2.setColor(chromaColorObj);
+g2.setColor(chromaEnabled
+            ? chromaColorObj
+            : Color.BLACK);
            
             BufferedImage frame = currentFrame;
             if (frame != null) {
@@ -348,32 +380,29 @@ g2.setColor(chromaColorObj);
                 g2.drawImage(frame, drawX, drawY, drawW, drawH, null);
             }
         }
+            */
+           @Override
+protected void paintComponent(Graphics g) {
+    Graphics2D g2 = (Graphics2D) g;
+
+    // Limpiar con transparencia real
+    g2.setComposite(AlphaComposite.Clear);
+    g2.fillRect(0, 0, getWidth(), getHeight());
+    g2.setComposite(AlphaComposite.SrcOver);
+
+    BufferedImage frame = currentFrame;
+    if (frame != null) {
+        double scaleX = (double) getWidth()  / frame.getWidth();
+        double scaleY = (double) getHeight() / frame.getHeight();
+        double scale  = Math.min(scaleX, scaleY);
+        int drawW = (int)(frame.getWidth()  * scale);
+        int drawH = (int)(frame.getHeight() * scale);
+        int drawX = (getWidth()  - drawW) / 2;
+        int drawY = (getHeight() - drawH) / 2;
+        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g2.drawImage(frame, drawX, drawY, drawW, drawH, null);
     }
-    public void applyWindowColorKey(Color keyColor) {
-        try {
-            com.sun.jna.Pointer pointer =
-                    com.sun.jna.Native.getComponentPointer(this);
-            if (pointer == null) return;
-            com.sun.jna.platform.win32.WinDef.HWND hwnd =
-                    new com.sun.jna.platform.win32.WinDef.HWND(pointer);
-
-            int GWL_EXSTYLE   = -20;
-            int WS_EX_LAYERED = 0x00080000;
-            int style = com.sun.jna.platform.win32.User32.INSTANCE
-                    .GetWindowLong(hwnd, GWL_EXSTYLE);
-            style |= WS_EX_LAYERED;
-            com.sun.jna.platform.win32.User32.INSTANCE
-                    .SetWindowLong(hwnd, GWL_EXSTYLE, style);
-
-            // Construir el color key en formato 0x00BBGGRR que usa Windows
-            int winColor = (keyColor.getBlue()  << 16)
-                        | (keyColor.getGreen() <<  8)
-                        |  keyColor.getRed();
-
-            WindowClickThrough.User32Extra.INSTANCE
-                    .SetLayeredWindowAttributes(hwnd, winColor, (byte) 255, 0x1);
-        } catch (Exception e) {
-            System.err.println("[vlcj] Error aplicando color key: " + e.getMessage());
-        }
+}
     }
 }

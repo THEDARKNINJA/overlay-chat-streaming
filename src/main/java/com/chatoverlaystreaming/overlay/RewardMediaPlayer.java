@@ -264,9 +264,10 @@ public class RewardMediaPlayer {
             });
 
             overlay.setVisible(true);
+            /*
             if (overlay instanceof VlcjVideoOverlay vlcjOverlay) {
                 vlcjOverlay.applyWindowColorKey(chromaColor);
-            }
+            } */
             overlay.play();
         });
     }
