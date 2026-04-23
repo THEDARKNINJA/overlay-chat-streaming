@@ -8,7 +8,6 @@ com\chatoverlaystreaming\overlay\VlcjVideoOverlay.class
 com\chatoverlaystreaming\overlay\ChatOverlay$13.class
 com\chatoverlaystreaming\overlay\VlcjVideoOverlay$1.class
 com\chatoverlaystreaming\overlay\RewardsPanel$2.class
-com\chatoverlaystreaming\overlay\ChatOverlay$ConnectionCallback.class
 com\chatoverlaystreaming\emotes\ImageCache$1.class
 com\chatoverlaystreaming\overlay\WrapEditorKitPro$SmartWrapLabelView.class
 com\chatoverlaystreaming\Logger$1.class
@@ -30,7 +29,6 @@ com\chatoverlaystreaming\overlay\ChatOverlay$MessageEntry.class
 com\chatoverlaystreaming\overlay\RewardsPanel$3.class
 com\chatoverlaystreaming\overlay\OAuthBrowser$1.class
 com\chatoverlaystreaming\overlay\ChatOverlay$3.class
-com\chatoverlaystreaming\overlay\ChatOverlay$15.class
 com\chatoverlaystreaming\overlay\RewardsPanel$1.class
 com\chatoverlaystreaming\model\ChatMessage.class
 com\chatoverlaystreaming\overlay\ChatOverlay.class
@@ -62,7 +60,6 @@ com\chatoverlaystreaming\overlay\ChatOverlay$1.class
 com\chatoverlaystreaming\overlay\WrapEditorKitPro.class
 com\chatoverlaystreaming\readers\YouTubeChatReader.class
 com\chatoverlaystreaming\overlay\RewardsPanel$5.class
-com\chatoverlaystreaming\overlay\ChatOverlay$14.class
 com\chatoverlaystreaming\overlay\ChatOverlay$5.class
 com\chatoverlaystreaming\overlay\RewardMediaPlayer.class
 com\chatoverlaystreaming\emotes\TwitchEmoteCache.class

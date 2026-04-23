@@ -58,7 +58,7 @@ public class ChatOverlay extends JFrame {
     // ── Componentes UI ────────────────────────────────────────────────────────
 
     private final JTextPane textPane;
-    private final StyledDocument doc;
+    private StyledDocument doc;
 
     private JPanel dragBar;
     private final Rectangle closeButtonRect  = new Rectangle();
@@ -162,7 +162,6 @@ public class ChatOverlay extends JFrame {
         // Inicializar componentes antes de construir la UI
         textPane      = new JTextPane();
         emoteRenderer = new EmoteRenderer(config.getIconSize(), textPane, sharedImageCache);
-        doc = textPane.getStyledDocument();
 
         // Cachés de emotes y badges (pueden ser lentas — se inicializan en background implícitamente)
         bttvEmoteCache = config.getLoadBTTV()
@@ -179,6 +178,7 @@ public class ChatOverlay extends JFrame {
 
         // Construir y añadir la UI
         add(buildMainPanel());
+        doc = textPane.getStyledDocument();
 
         // Listeners de foco, arrastre y resize
         addWindowFocusListener(buildFocusListener());
