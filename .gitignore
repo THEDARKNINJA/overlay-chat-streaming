@@ -33,3 +33,4 @@ package_jdeps.bat
 target/
 package_input/
 package_output/
+rewards/

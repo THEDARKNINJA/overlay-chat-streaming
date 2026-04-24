@@ -55,6 +55,7 @@ com\chatoverlaystreaming\overlay\ChatOverlay$11.class
 com\chatoverlaystreaming\emotes\EmoteRenderer.class
 com\chatoverlaystreaming\emotes\YouTubeEmojiCache.class
 com\chatoverlaystreaming\overlay\ObsAwareDialog$1.class
+com\chatoverlaystreaming\overlay\RewardMediaPlayer$PlayContext.class
 com\chatoverlaystreaming\readers\TwitchChatReader.class
 com\chatoverlaystreaming\overlay\ChatOverlay$1.class
 com\chatoverlaystreaming\overlay\WrapEditorKitPro.class
