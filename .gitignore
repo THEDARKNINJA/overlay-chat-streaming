@@ -28,6 +28,9 @@ config.json
 package_first.bat
 package_fix.bat
 package_jdeps.bat
+package_solo_app.bat
+modules.txt
+modules_chat.txt
 
 #directorios
 target/

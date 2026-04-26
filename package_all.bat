@@ -153,11 +153,11 @@ if errorlevel 1 (
 :: =========================
 echo [8/9] Empaquetando Launcher...
 
+:: --win-console ^ para add consola y ver que hace
 "%JAVA_HOME%\bin\jpackage" ^
   --type app-image ^
   --name Launcher ^
   --input "%INPUT_LAUNCHER%" ^
-  --win-console ^
   --main-jar launcher.jar ^
   --main-class com.chatoverlaystreaming.Launcher ^
   --java-options "-Dfile.encoding=UTF-8" ^
@@ -201,9 +201,20 @@ xcopy /E /I /Y "%OUTPUT_CHAT%\ChatOverlay\runtime" "%DIST_DIR%\runtime" >nul
 :: Anadir Launcher.exe al mismo nivel que ChatOverlay.exe
 copy "%OUTPUT_LAUNCHER%\Launcher\Launcher.exe" "%DIST_DIR%\Launcher.exe" >nul
 
-:: Anadir launcher.jar y Launcher.cfg a app\ (junto a overlay.jar y ChatOverlay.cfg)
-copy "%OUTPUT_LAUNCHER%\Launcher\app\launcher.jar" "%DIST_DIR%\app\launcher.jar" >nul
-copy "%OUTPUT_LAUNCHER%\Launcher\app\Launcher.cfg" "%DIST_DIR%\app\Launcher.cfg" >nul
+:: launcher.jar va en su propia subcarpeta Launcher\app\
+:: NO va en app\ para que ChatOverlay.exe no lo cargue
+mkdir "%DIST_DIR%\Launcher\app"
+copy "%OUTPUT_LAUNCHER%\Launcher\app\launcher.jar" "%DIST_DIR%\Launcher\app\launcher.jar" >nul
+:: Copiar el Launcher.cfg a app\ del root para que Launcher.exe lo encuentre
+:: jpackage busca app\Launcher.cfg relativo al exe
+:: copy "%OUTPUT_LAUNCHER%\Launcher\app\Launcher.cfg" "%DIST_DIR%\app\Launcher.cfg" >nul
+:: Escribir Launcher.cfg en app\ apuntando al jar en Launcher\app\
+(
+    echo [Application]
+    echo app.classpath=$APPDIR/../Launcher/app/launcher.jar
+    echo app.mainclass=com.chatoverlaystreaming.Launcher
+    echo app.version=1.0
+) > "%DIST_DIR%\app\Launcher.cfg"
 
 :: El runtime\ generado para el Launcher lo descartamos:
 :: ambos exes usaran DIST_DIR\runtime\ que ya copiamos de ChatOverlay
