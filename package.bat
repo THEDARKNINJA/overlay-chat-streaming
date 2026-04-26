@@ -135,7 +135,7 @@ if errorlevel 1 (
 :: =========================
 echo [7/7] Copiando configuracion por defecto...
 
-copy /Y "config.example.json" "%OUTPUT_DIR%\ChatOverlay\config.json"
+copy /Y "config.example.json" "%OUTPUT_DIR%\ChatOverlay\config.example.json"
 
 copy /Y "youtube_unicode_chars.json" "%OUTPUT_DIR%\ChatOverlay\youtube_unicode_chars.json"
 

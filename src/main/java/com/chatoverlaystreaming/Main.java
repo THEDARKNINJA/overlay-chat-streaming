@@ -18,6 +18,7 @@ import javax.swing.*;
 
 import org.json.JSONObject;
 
+import java.nio.file.Path;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -27,6 +28,20 @@ import java.util.concurrent.atomic.AtomicReference;
 public class Main {
     public static void main(String[] args) {
         Logger.init();
+
+        
+        // Procesar archivos pendientes del Launcher (archivos del propio Launcher
+        // que no se pudieron copiar durante la actualización porque estaban en uso)
+        for (String arg : args) {
+            if (arg.startsWith("--pending-launcher-file=")) {
+                String entry  = arg.substring("--pending-launcher-file=".length());
+                String[] parts = entry.split("\\|", 2);
+                if (parts.length == 2) {
+                    applyPendingLauncherFile(Path.of(parts[0]), Path.of(parts[1]));
+                }
+            }
+        }
+
         Runtime.getRuntime().addShutdownHook(new Thread(Logger::close));
 
         // Inicializar JavaFX antes de todo
@@ -151,11 +166,12 @@ public class Main {
             */
         });
 
+        /*
         // Al final de main(), después de lanzar la UI:
         Thread.ofVirtual().name("update-checker").start(() -> {
             try {
                 Thread.sleep(5000); // esperar a que la app esté lista
-                JSONObject release = Updater.checkForUpdate();
+                JSONObject release = Launcher.checkForUpdate();
                 if (release != null) {
                     String version = release.getString("tag_name");
                     SwingUtilities.invokeLater(() -> {
@@ -170,7 +186,8 @@ public class Main {
                         if (choice == javax.swing.JOptionPane.YES_OPTION) {
                             Thread.ofVirtual().start(() -> {
                                 try {
-                                    Updater.downloadAndApply(release, null);
+                                    Launcher.downloadAndApply(release);
+                                    // debería de enviarse un mensaje del tipo "Descargando actualización y reiniciando, espere un momento..." en el overlay
                                 } catch (Exception e) {
                                     System.err.println("[Updater] Error: "
                                             + e.getMessage());
@@ -192,6 +209,7 @@ public class Main {
                         + e.getMessage());
             }
         });
+         */
 
     }
 
@@ -375,4 +393,33 @@ public class Main {
             }
         });
     }
+    /**
+     * Copia un archivo pendiente del Launcher en un hilo virtual que reintenta
+     * hasta conseguirlo. Usado cuando el Launcher necesita actualizarse a sí mismo
+     * (no puede sobreescribirse mientras está en ejecución, así que lo hace
+     * ChatOverlay una vez que el Launcher ha cerrado).
+     *
+     * @param src  Ruta del archivo nuevo (en la carpeta temporal de la actualización).
+     * @param dest Ruta destino (en el directorio de instalación).
+     */
+    private static void applyPendingLauncherFile(Path src, Path dest) {
+        Thread.ofVirtual().name("pending-launcher-copy-" + dest.getFileName()).start(() -> {
+            System.out.println("[Main] Intentando copiar archivo pendiente del Launcher: "
+                    + dest.getFileName());
+            while (true) {
+                try {
+                    java.nio.file.Files.copy(src, dest,
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    System.out.println("[Main] Archivo del Launcher actualizado: "
+                            + dest.getFileName());
+                    return;
+                } catch (java.io.IOException e) {
+                    System.out.println("[Main] Reintentando copiar "
+                            + dest.getFileName() + " (en uso)...");
+                    try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+                }
+            }
+        });
+    }
+ 
 }

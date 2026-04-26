@@ -1,0 +1,224 @@
+package com.chatoverlaystreaming;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.*;
+import java.net.*;
+import java.nio.file.*;
+import java.util.zip.*;
+
+/**
+ * Gestiona la comprobación e instalación de actualizaciones desde GitHub Releases.
+ *
+ * Flujo de actualización:
+ *   1. checkForUpdate() consulta la API de GitHub y compara el tag del último release
+ *      con la versión local (version.txt junto al exe, o en resources del jar).
+ *   2. Si hay versión nueva, downloadAndApply() descarga el .zip del release,
+ *      lo extrae en una carpeta temporal y lanza un updater.bat externo.
+ *   3. El bat espera a que el proceso de Java termine completamente (usando tasklist
+ *      en bucle), copia los archivos encima de la instalación actual y reinicia el exe.
+ *   4. La app llama a System.exit(0) para liberar el lock sobre el exe.
+ *
+ * El bat espera la terminación real del proceso en lugar de un timeout fijo,
+ * lo que resuelve el error "acceso denegado" al copiar ChatOverlay.exe.
+ */
+public class Updater {
+
+    // ── Constantes ────────────────────────────────────────────────────────────
+
+    private static final String GITHUB_API =
+            "https://api.github.com/repos/THEDARKNINJA/overlay-chat-streaming/releases/latest";
+    private static final String VERSION_FILE = "version.txt";
+
+    // ── API pública ───────────────────────────────────────────────────────────
+
+    /**
+     * Consulta la API de GitHub y comprueba si hay una versión más nueva.
+     *
+     * @return JSONObject del release si hay actualización disponible, null si no.
+     * @throws Exception Si falla la conexión o la respuesta no es válida.
+     */
+    public static JSONObject checkForUpdate() throws Exception {
+        String currentVersion = getCurrentVersion();
+        System.out.println("[Updater] Versión actual: " + currentVersion);
+
+        HttpURLConnection conn = (HttpURLConnection)
+                URI.create(GITHUB_API).toURL().openConnection();
+        conn.setRequestProperty("User-Agent", "ChatOverlay");
+        conn.setConnectTimeout(5000);
+        conn.setReadTimeout(5000);
+
+        if (conn.getResponseCode() != 200) {
+            System.err.println("[Updater] GitHub API respondió: " + conn.getResponseCode());
+            return null;
+        }
+
+        try (InputStream is = conn.getInputStream()) {
+            JSONObject release      = new JSONObject(new String(is.readAllBytes()));
+            String     latestVersion = release.getString("tag_name");
+            System.out.println("[Updater] Última versión disponible: " + latestVersion);
+
+            return latestVersion.equals(currentVersion) ? null : release;
+        }
+    }
+
+    /**
+     * Descarga el .zip del release, lo extrae en una carpeta temporal,
+     * genera un updater.bat y lo lanza como proceso independiente.
+     * Llama a System.exit(0) para liberar el lock sobre ChatOverlay.exe.
+     *
+     * @param release JSONObject del release de GitHub (resultado de checkForUpdate).
+     * @throws Exception Si no se encuentra el .zip, falla la descarga o la extracción.
+     */
+    public static void downloadAndApply(JSONObject release) throws Exception {
+        String zipUrl = findZipAssetUrl(release);
+        if (zipUrl == null) {
+            throw new Exception("No se encontró archivo .zip en el release de GitHub.");
+        }
+
+        // Descargar y extraer en carpeta temporal
+        Path tempDir    = Files.createTempDirectory("chatoverlay_update_");
+        Path zipPath    = tempDir.resolve("update.zip");
+        Path extractDir = tempDir.resolve("extracted");
+
+        System.out.println("[Updater] Descargando: " + zipUrl);
+        try (InputStream in = URI.create(zipUrl).toURL().openStream()) {
+            Files.copy(in, zipPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+        System.out.println("[Updater] Descarga completada. Extrayendo...");
+
+        Files.createDirectories(extractDir);
+        unzip(zipPath, extractDir);
+        System.out.println("[Updater] Extraído en: " + extractDir);
+
+        // Generar y lanzar el bat externo
+        Path appDir = Path.of(System.getProperty("user.dir"));
+        Path batPath = buildUpdaterBat(tempDir, extractDir, appDir);
+
+        System.out.println("[Updater] Lanzando updater.bat y cerrando la aplicación...");
+        new ProcessBuilder("cmd.exe", "/c", "start", "/min",
+                batPath.toAbsolutePath().toString())
+                .start();
+
+        // Cerrar la app para liberar el lock sobre ChatOverlay.exe
+        System.exit(0);
+    }
+
+    // ── Implementación ────────────────────────────────────────────────────────
+
+    /**
+     * Busca el primer asset .zip en los assets del release.
+     *
+     * @param release JSONObject del release de GitHub.
+     * @return URL de descarga del .zip, o null si no hay ninguno.
+     */
+    private static String findZipAssetUrl(JSONObject release) {
+        JSONArray assets = release.getJSONArray("assets");
+        for (int i = 0; i < assets.length(); i++) {
+            JSONObject asset = assets.getJSONObject(i);
+            if (asset.getString("name").endsWith(".zip")) {
+                return asset.getString("browser_download_url");
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Genera el script updater.bat en la carpeta temporal.
+     *
+     * El bat usa tasklist en bucle para esperar hasta que el proceso Java
+     * haya terminado completamente antes de copiar los archivos.
+     * Esto resuelve el error "acceso denegado" al intentar sobrescribir
+     * ChatOverlay.exe mientras el proceso aún tiene un lock sobre él.
+     *
+     * @param tempDir    Carpeta temporal donde se escribe el bat.
+     * @param extractDir Carpeta con los archivos extraídos del .zip.
+     * @param appDir     Directorio de instalación actual de la app.
+     * @return Path del bat generado.
+     */
+    private static Path buildUpdaterBat(Path tempDir, Path extractDir,
+                                     Path appDir) throws IOException {
+        Path batPath = tempDir.resolve("updater.bat");
+
+        String bat = """
+                @echo off
+                echo [Updater] Esperando que ChatOverlay.exe termine...
+                :wait_loop
+                tasklist /FI "IMAGENAME eq ChatOverlay.exe" 2>nul | find /I "ChatOverlay.exe" >nul
+                if not errorlevel 1 (
+                    timeout /t 1 /nobreak >nul
+                    goto wait_loop
+                )
+                echo [Updater] Proceso terminado. Aplicando actualizacion...
+                :wait_unlock
+                xcopy /E /Y /I "%s\\*" "%s\\"
+                if errorlevel 1 (
+                    echo [Updater] ERROR: no se pudo copiar. Comprueba permisos.
+                    timeout /t 1 /nobreak >nul
+                    goto wait_unlock
+                )
+                echo [Updater] Actualizacion completada. Reiniciando...
+                start "" "%s\\ChatOverlay.exe"
+                exit
+                """.formatted(
+                extractDir.toAbsolutePath(),
+                appDir.toAbsolutePath(),
+                appDir.toAbsolutePath());
+
+        Files.writeString(batPath, bat);
+        return batPath;
+    }
+
+    /**
+     * Lee la versión actual desde version.txt junto al exe.
+     * Si no existe, intenta leerla desde los resources del jar.
+     * Devuelve "0.0.0" si no puede determinarse.
+     */
+    private static String getCurrentVersion() {
+        try {
+            Path versionFile = Path.of(VERSION_FILE);
+            if (Files.exists(versionFile)) {
+                return Files.readString(versionFile).trim();
+            }
+            // Fallback: version.txt empaquetado en el jar
+            try (InputStream is = Updater.class.getResourceAsStream("/version.txt")) {
+                if (is != null) return new String(is.readAllBytes()).trim();
+            }
+        } catch (Exception e) {
+            System.err.println("[Updater] No se pudo leer version.txt: " + e.getMessage());
+        }
+        return "0.0.0";
+    }
+
+    /**
+     * Extrae un archivo .zip en el directorio destino.
+     * Incluye protección contra zip slip (rutas que escapan del destino).
+     *
+     * @param zipFile Archivo .zip a extraer.
+     * @param destDir Directorio destino de la extracción.
+     * @throws IOException Si hay error de I/O o se detecta zip slip.
+     */
+    private static void unzip(Path zipFile, Path destDir) throws IOException {
+        try (ZipInputStream zis = new ZipInputStream(
+                new FileInputStream(zipFile.toFile()))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                Path outPath = destDir.resolve(entry.getName()).normalize();
+
+                // Protección zip slip: rechazar rutas que escapen del destino
+                if (!outPath.startsWith(destDir)) {
+                    throw new IOException("Zip slip detectado: " + entry.getName());
+                }
+
+                if (entry.isDirectory()) {
+                    Files.createDirectories(outPath);
+                } else {
+                    Files.createDirectories(outPath.getParent());
+                    Files.copy(zis, outPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+                zis.closeEntry();
+            }
+        }
+    }
+}
