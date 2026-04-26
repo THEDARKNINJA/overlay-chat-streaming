@@ -181,8 +181,13 @@ public class VideoOverlay extends JFrame implements VideoPlayerWindow {
                 player.setOnError(()    -> stopPlayback(frameTimer, true));
 
             } catch (Exception e) {
-                System.err.println("[VideoOverlay] Error iniciando reproducción: "
-                        + e.getMessage());
+                String msg = "[VideoOverlay] Error iniciando reproducción: " + e.getMessage();
+                System.err.println(msg);
+                // Para que el onErrorCallback sepa que hay un error 
+                // y RewardMediaPlayer decida si reintentar con VLCJ
+                if (onErrorCallback != null) {
+                    SwingUtilities.invokeLater(() -> onErrorCallback.accept(msg));
+                }
                 SwingUtilities.invokeLater(this::safeDispose);
             }
         });
@@ -225,7 +230,7 @@ public class VideoOverlay extends JFrame implements VideoPlayerWindow {
 
         if (isError && onErrorCallback != null) {
             String msg = (player != null && player.getError() != null)
-                    ? player.getError().getMessage() : "desconocido";
+                    ? player.getError().getMessage() : "Error desconocido en MediaPlayer";
             System.err.println("[VideoOverlay] Error de reproducción: " + msg);
             onErrorCallback.accept(msg);
         }

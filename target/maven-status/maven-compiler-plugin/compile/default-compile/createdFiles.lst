@@ -13,7 +13,6 @@ com\chatoverlaystreaming\emotes\ImageCache$1.class
 com\chatoverlaystreaming\overlay\WrapEditorKitPro$SmartWrapLabelView.class
 com\chatoverlaystreaming\Logger$1.class
 com\chatoverlaystreaming\Main.class
-com\chatoverlaystreaming\overlay\WrapEditorKitPro$WrapColumnFactoryPro.class
 com\chatoverlaystreaming\overlay\VlcjVideoOverlay$3.class
 com\chatoverlaystreaming\emotes\CenteredIcon.class
 com\chatoverlaystreaming\readers\TwitchEventSub$1.class
@@ -36,6 +35,7 @@ com\chatoverlaystreaming\overlay\ChatOverlay.class
 com\chatoverlaystreaming\emotes\BTTVEmoteCache.class
 com\chatoverlaystreaming\overlay\Config.class
 com\chatoverlaystreaming\overlay\VlcjVideoOverlay$2.class
+com\chatoverlaystreaming\overlay\WrapEditorKitPro$WrapColumnFactory.class
 com\chatoverlaystreaming\overlay\VlcjDetector.class
 com\chatoverlaystreaming\overlay\VideoOverlay.class
 com\chatoverlaystreaming\model\EmoteToken.class

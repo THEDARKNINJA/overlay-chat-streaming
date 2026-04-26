@@ -66,7 +66,8 @@ public class RewardMediaPlayer {
             int      chromaTolerance,
             int      posX,
             int      posY,
-            boolean  randomPos
+            boolean  randomPos,
+            boolean usedFxFailed   // true si JavaFX ya falló para este archivo
     ) {
         /** Construye un PlayContext desde la configuración JSON de una recompensa. */
         static PlayContext fromConfig(String rewardId, JSONObject cfg) {
@@ -86,7 +87,18 @@ public class RewardMediaPlayer {
                     cfg.optInt("chromaTolerance", 40),
                     cfg.optInt("posX",             0),
                     cfg.optInt("posY",             0),
-                    cfg.optBoolean("randomPos",  false)
+                    cfg.optBoolean("randomPos",  false),
+                    false   // usedFxFailed: empieza como false
+            );
+        }
+        /** Devuelve una copia del contexto marcando que JavaFX ya falló para este archivo. */
+        PlayContext withFxFailed() {
+            return new PlayContext(
+                    rewardId(), type(), playMode(), volume(),
+                    width(), height(), displayIndex(), fps(), windowTitle(),
+                    chromaEnabled(), chromaColor(), chromaTolerance(),
+                    posX(), posY(), randomPos(),
+                    true  // usedFxFailed = true
             );
         }
     }
@@ -245,22 +257,44 @@ public class RewardMediaPlayer {
             overlay.setOnError(errorMsg -> {
                 System.err.println("[Media] Error vídeo '"
                         + file.getFileName() + "': " + errorMsg);
-                markFailedAndRetry(file, ctx, allFiles);
+                // Si era JavaFX con chroma y vlcj está disponible,
+                // reintentar el MISMO archivo con vlcj antes de marcarlo como fallido
+                if (ctx.chromaEnabled() && !ctx.usedFxFailed()
+                        && VlcjDetector.isAvailable()) {
+                    System.out.println("[Media] JavaFX falló con chroma, "
+                            + "reintentando con vlcj: " + file.getFileName());
+                    Thread.ofVirtual().name("media-retry-vlcj").start(() ->
+                        playVideo(file, ctx.withFxFailed(), allFiles));
+                } else {
+                    // Error definitivo: marcar como fallido y probar otro archivo
+                    markFailedAndRetry(file, ctx, allFiles);
+                }
             });
 
             overlay.setOnReady(() -> registerPlaySilently(ctx.rewardId(), file));
-
             overlay.setVisible(true);
             overlay.play();
         });
     }
 
     /**
-     * Instancia el reproductor de vídeo apropiado según la disponibilidad de VLC.
-     * vlcj tiene soporte de codecs más amplio; JavaFX se usa como fallback.
+     * Instancia el reproductor de vídeo apropiado.
+     *
+     * Prioridad:
+     *   - Si el chroma está activo: JavaFX primero (chroma de mayor calidad),
+     *     vlcj como fallback si JavaFX no puede reproducir el archivo.
+     *   - Si el chroma no está activo: vlcj primero (mayor compatibilidad
+     *     de codecs), JavaFX como fallback si VLC no está instalado.
      */
     private static VideoPlayerWindow createVideoOverlay(Path file, PlayContext ctx) {
-        if (VlcjDetector.isAvailable()) {
+        if (ctx.chromaEnabled() && !ctx.usedFxFailed()) {
+            // Con chroma: preferir JavaFX por calidad visual
+            ensureFX();
+            return new VideoOverlay(file, ctx.volume(), ctx.width(), ctx.height(),
+                    ctx.displayIndex(), ctx.fps(), ctx.windowTitle(),
+                    ctx.posX(), ctx.posY(), ctx.randomPos());
+        } else if (VlcjDetector.isAvailable()) {
+            // Sin chroma: preferir vlcj por compatibilidad de codecs
             return new VlcjVideoOverlay(file, ctx.volume(), ctx.width(), ctx.height(),
                     ctx.displayIndex(), ctx.fps(), ctx.windowTitle(),
                     ctx.posX(), ctx.posY(), ctx.randomPos());
