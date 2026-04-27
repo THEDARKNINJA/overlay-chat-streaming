@@ -230,6 +230,12 @@ if exist "youtube_emojis" (
     xcopy /E /I /Y "youtube_emojis" "%DIST_DIR%\youtube_emojis" >nul
 )
 
+:: Copiar jcef-bundle preinstalado para evitar descarga en primer arranque
+if exist "jcef-bundle" (
+    xcopy /E /I /Y "jcef-bundle" "%DIST_DIR%\jcef-bundle" >nul
+    echo jcef-bundle incluido en el paquete.
+)
+
 :: Limpieza de carpetas temporales de trabajo
 rmdir /s /q "%INPUT_CHAT%"
 rmdir /s /q "%INPUT_LAUNCHER%"
