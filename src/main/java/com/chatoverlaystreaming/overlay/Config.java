@@ -304,7 +304,7 @@ public class Config {
                 "loadBTTV": true,
                 "canClickLink": true,
                 "messageTimeoutSeconds": 0,
-                "logActivity": true
+                "logActivity": false
               },
               "twitchRewards": {}
             }
