@@ -117,20 +117,20 @@ public class ChatOverlay extends JFrame {
 
     /**
      * Entrada de mensaje para el sistema de limpieza automática.
-     * Almacena el timestamp de inserción y las posiciones del documento
-     * (que se actualizan automáticamente al modificar el documento).
+     * Solo almacena el timestamp de inserción — los offsets no se guardan
+     * porque las Position de Swing colapsan a 0 cuando se borra texto antes
+     * de ellas, lo que hacía que mensajes posteriores al borrado quedasen
+     * huérfanos en el documento sin poder eliminarse.
+     *
+     * El orden cronológico en el documento siempre coincide con el orden
+     * de inserción, por lo que basta con saber cuántos mensajes han expirado
+     * para borrar ese número de párrafos desde el inicio del documento.
      */
     private static class MessageEntry {
-        final long     timestamp;
-        final Position startPos;
-        final Position endPos;
-
-        MessageEntry(long timestamp, Position startPos, Position endPos) {
-            this.timestamp = timestamp;
-            this.startPos  = startPos;
-            this.endPos    = endPos;
-        }
+        final long timestamp;
+        MessageEntry(long timestamp) { this.timestamp = timestamp; }
     }
+
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -857,66 +857,88 @@ public class ChatOverlay extends JFrame {
     // ── Limpieza automática por timeout ───────────────────────────────────────
 
     /**
-     * Registra un rango de texto del documento para su eliminación automática
+     * Registra un mensaje recién insertado para su eliminación automática
      * cuando expire el timeout configurado.
-     * Usa Position en lugar de offsets enteros para que se actualicen
-     * automáticamente al modificar el documento.
+     *
+     * Solo guarda el timestamp de inserción. Los parámetros startOffset y
+     * endOffset se reciben por compatibilidad con la firma de llamada pero
+     * no se usan — el borrado se hace siempre por posición en el documento
+     * (primer párrafo), no por offsets guardados.
+     *
+     * @param doc         Documento en el que se insertó el mensaje (no usado).
+     * @param startOffset Offset de inicio del mensaje insertado (no usado).
+     * @param endOffset   Offset de fin del mensaje insertado (no usado).
      */
     private void registerForCleanup(StyledDocument doc, int startOffset, int endOffset) {
         if (config.getMessageTimeout() <= 0) return;
-        try {
-            messageEntries.addLast(new MessageEntry(
-                    System.currentTimeMillis(),
-                    doc.createPosition(startOffset),
-                    doc.createPosition(endOffset)));
-        } catch (BadLocationException e) {
-            System.err.println("[Cleanup] Error registrando posición: " + e.getMessage());
-        }
+        messageEntries.addLast(new MessageEntry(System.currentTimeMillis()));
     }
+
 
     /**
      * Arranca el timer de limpieza automática de mensajes (cada segundo).
      * Solo activo si messageTimeoutSeconds > 0 en la configuración.
-     * Borra los mensajes de atrás hacia adelante para no desplazar los offsets
-     * de los mensajes pendientes.
+     *
+     * <p>Estrategia de borrado:
+     * <ol>
+     *   <li>Cada segundo se cuenta cuántos mensajes del frente de la cola
+     *       han superado el timeout.</li>
+     *   <li>Por cada mensaje expirado, se elimina el primer párrafo del
+     *       documento y se saca la entrada de la cola.</li>
+     * </ol>
+     *
+     * <p>Por qué no se usan offsets ni Position:
+     * <ul>
+     *   <li>Los offsets enteros quedan desfasados cuando se borra texto
+     *       anterior en el documento.</li>
+     *   <li>Las Position de Swing colapsan a offset 0 cuando se elimina
+     *       el rango que las contiene, haciendo que los borrados posteriores
+     *       calculen {@code length=0} y no eliminen nada.</li>
+     * </ul>
+     *
+     * <p>El enfoque de "borrar siempre el primer párrafo" es seguro porque
+     * el documento mantiene los mensajes en orden cronológico estricto:
+     * el mensaje más antiguo siempre es el primero.
      */
     private void startMessageCleanup() {
         int timeoutSecs = config.getMessageTimeout();
         if (timeoutSecs <= 0) return;
-
+ 
         long limitMs = timeoutSecs * 1000L;
-
+ 
         new Timer(1000, e -> {
             if (messageEntries.isEmpty()) return;
             long now = System.currentTimeMillis();
-
-            // Recopilar rangos expirados
-            List<int[]> toDelete = new ArrayList<>();
-            while (!messageEntries.isEmpty()) {
-                MessageEntry entry = messageEntries.peekFirst();
+ 
+            // Contar cuántos mensajes han expirado desde el frente de la cola
+            int count = 0;
+            for (MessageEntry entry : messageEntries) {
                 if (now - entry.timestamp < limitMs) break;
-                messageEntries.pollFirst();
-                int start = entry.startPos.getOffset();
-                int end   = entry.endPos.getOffset();
-                if (end > start) toDelete.add(new int[]{start, end});
+                count++;
             }
-
-            if (toDelete.isEmpty()) return;
-
-            // Borrar de atrás hacia adelante para no desplazar offsets anteriores
-            for (int i = toDelete.size() - 1; i >= 0; i--) {
-                int start  = toDelete.get(i)[0];
-                int length = toDelete.get(i)[1] - start;
+ 
+            if (count == 0) return;
+ 
+            // Borrar los primeros 'count' párrafos del documento.
+            // Siempre se borra desde el offset 0 porque tras cada remove
+            // el siguiente mensaje más antiguo pasa a ser el nuevo primero.
+            for (int i = 0; i < count; i++) {
                 try {
-                    if (start + length <= doc.getLength()) {
-                        doc.remove(start, length);
+                    Element root  = doc.getDefaultRootElement();
+                    if (root.getElementCount() == 0) break;
+                    Element first = root.getElement(0);
+                    int     end   = Math.min(first.getEndOffset(), doc.getLength());
+                    if (end > 0) {
+                        doc.remove(0, end);
                     }
                 } catch (BadLocationException ex) {
                     System.err.println("[Cleanup] Error borrando: " + ex.getMessage());
                 }
+                messageEntries.pollFirst();
             }
         }).start();
     }
+
 
     // ── Visibilidad OBS ───────────────────────────────────────────────────────
 
