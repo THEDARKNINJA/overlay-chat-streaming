@@ -1,0 +1,1 @@
+java.base,java.compiler,java.management,java.naming,java.net.http,java.security.jgss,java.sql,jdk.jfr,jdk.unsupported,jdk.unsupported.desktop

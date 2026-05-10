@@ -5,6 +5,7 @@ E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\ImageCac
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\TwitchBadgeCache.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\TwitchEmoteCache.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\emotes\YouTubeEmojiCache.java
+E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\Launcher.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\Logger.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\Main.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\model\ChatMessage.java
@@ -27,4 +28,3 @@ E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\readers\TwitchC
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\readers\TwitchEventSub.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\readers\YouTubeChatReader.java
 E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\service\ViewerCountService.java
-E:\overlay-chat-streaming\src\main\java\com\chatoverlaystreaming\Updater.java

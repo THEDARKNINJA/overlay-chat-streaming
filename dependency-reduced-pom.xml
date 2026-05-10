@@ -11,27 +11,61 @@
         <version>3.4.1</version>
         <executions>
           <execution>
+            <id>shade-overlay</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
             </goals>
             <configuration>
+              <outputFile>${project.build.directory}/overlay.jar</outputFile>
               <transformers>
                 <transformer>
                   <mainClass>com.chatoverlaystreaming.Main</mainClass>
                 </transformer>
+                <transformer>
+                  <resources>
+                    <resource>META-INF/*.SF</resource>
+                    <resource>META-INF/*.DSA</resource>
+                    <resource>META-INF/*.RSA</resource>
+                  </resources>
+                </transformer>
               </transformers>
+              <excludes>
+                <exclude>com/chatoverlaystreaming/Launcher.class</exclude>
+                <exclude>com/chatoverlaystreaming/Launcher$*.class</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+          <execution>
+            <id>shade-launcher</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <outputFile>${project.build.directory}/launcher.jar</outputFile>
+              <transformers>
+                <transformer>
+                  <mainClass>com.chatoverlaystreaming.Launcher</mainClass>
+                </transformer>
+              </transformers>
+              <artifactSet>
+                <includes>
+                  <include>com.chatoverlaystreaming:chat-overlay-streaming</include>
+                </includes>
+              </artifactSet>
+              <filters>
+                <filter>
+                  <artifact>com.chatoverlaystreaming:chat-overlay-streaming</artifact>
+                  <includes>
+                    <include>com/chatoverlaystreaming/Launcher.class</include>
+                    <include>com/chatoverlaystreaming/Launcher$*.class</include>
+                  </includes>
+                </filter>
+              </filters>
             </configuration>
           </execution>
         </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.openjfx</groupId>
-        <artifactId>javafx-maven-plugin</artifactId>
-        <version>0.0.8</version>
-        <configuration>
-          <mainClass>com.chatoverlaystreaming.Main</mainClass>
-        </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-jar-plugin</artifactId>
@@ -61,6 +95,14 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.openjfx</groupId>
+        <artifactId>javafx-maven-plugin</artifactId>
+        <version>0.0.8</version>
+        <configuration>
+          <mainClass>com.chatoverlaystreaming.Main</mainClass>
+        </configuration>
       </plugin>
     </plugins>
   </build>
