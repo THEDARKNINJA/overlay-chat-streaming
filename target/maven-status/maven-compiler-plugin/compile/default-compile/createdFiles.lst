@@ -9,6 +9,7 @@ com\chatoverlaystreaming\overlay\ChatOverlay$13.class
 com\chatoverlaystreaming\Launcher.class
 com\chatoverlaystreaming\overlay\VlcjVideoOverlay$1.class
 com\chatoverlaystreaming\overlay\RewardsPanel$2.class
+com\chatoverlaystreaming\emotes\TwitchEmoteCache$EmotePosition.class
 com\chatoverlaystreaming\emotes\ImageCache$1.class
 com\chatoverlaystreaming\overlay\WrapEditorKitPro$SmartWrapLabelView.class
 com\chatoverlaystreaming\Logger$1.class
