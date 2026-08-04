@@ -268,14 +268,14 @@ public class ConfigPanel extends JDialog {
         GridBagConstraints gbc = createGbc();
         int row = 0;
 
-        minPollingSpinner     = createSpinner(1000, 60000, 1000);
+        minPollingSpinner     = createSpinner(1, 120, 1);
         showViewerCountCheck  = createCheckBox("Mostrar contador de viewers");
         canClickLinkCheck     = createCheckBox("Links clicables");
         loadBTTVCheck         = createCheckBox("Cargar emotes BTTV");
         messageTimeoutSpinner = createSpinner(0, 3600, 5);
         logActivityCheck      = createCheckBox("Registrar actividad en log");
 
-        addRow(panel, gbc, row++, "Intervalo polling (ms):",    minPollingSpinner);
+        addRow(panel, gbc, row++, "Intervalo polling (seg):",    minPollingSpinner);
         addRow(panel, gbc, row++, "",                           showViewerCountCheck);
         addRow(panel, gbc, row++, "",                           canClickLinkCheck);
         addRow(panel, gbc, row++, "",                           loadBTTVCheck);

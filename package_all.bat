@@ -250,20 +250,22 @@ echo.
 echo Estructura generada en: %DIST_DIR%
 echo.
 echo   %DIST_DIR%\
-echo   ├── Launcher.exe              (punto de entrada con actualizaciones)
-echo   ├── ChatOverlay.exe           (acceso directo sin actualizaciones)
-echo   ├── app\
-echo   │   ├── overlay.jar
-echo   │   ├── launcher.jar
-echo   │   ├── ChatOverlay.cfg
-echo   │   ├── Launcher.cfg
-echo   │   └── libs\
-echo   ├── runtime\
-echo   ├── youtube_emojis\
-echo   ├── youtube_unicode_chars.json
-echo   ├── version.txt
-echo   ├── icon.png
-echo   └── config.example.json
+echo      Launcher.exe              (punto de entrada con actualizaciones)
+echo      ChatOverlay.exe           (acceso directo sin actualizaciones)
+echo      app\
+echo           overlay.jar
+echo           launcher.jar
+echo           ChatOverlay.cfg
+echo           Launcher.cfg
+echo           libs\
+echo      jcef-bundle\
+echo      runtime\
+echo      youtube_emojis\
+echo      youtube_unicode_chars.json
+echo      version.txt
+echo      icon.png
+echo      icon.ico
+echo      config.example.json
 echo.
 echo Para distribuir: comprime %DIST_DIR% en un .zip
 echo El usuario descomprime y ejecuta Launcher.exe
