@@ -64,6 +64,7 @@ public class RewardsPanel extends JDialog {
     private JCheckBox  enabledCheck;
     private JCheckBox  cooldownCheck;
     private JSpinner   cooldownSpinner;
+    private JSpinner   chatDelaySpinner;
 
     // ── Campos comunes media ──────────────────────────────────────────────────
 
@@ -360,6 +361,13 @@ public class RewardsPanel extends JDialog {
 
         // Slider de volumen con etiqueta de porcentaje
         addFormRow(form, gbc, row++, "Volumen:", buildVolumePanel());
+
+        // Retraso antes de mostrar el mensaje en el chat
+        chatDelaySpinner = new JSpinner(new SpinnerNumberModel(0, 0, 3600, 1));
+        styleSpinner(chatDelaySpinner);
+        chatDelaySpinner.setPreferredSize(new Dimension(80, 26));
+        addFormRow(form, gbc, row++, "Retraso en chat (s):", chatDelaySpinner);
+
 
         return row;
     }
@@ -675,6 +683,7 @@ public class RewardsPanel extends JDialog {
         titleField.setText(reward.optString("title", ""));
         promptField.setText(reward.optString("prompt", ""));
         costSpinner.setValue(reward.optInt("cost", 100));
+        chatDelaySpinner.setValue(localCfg.optInt("chatDelaySeconds", 0));
         colorField.setText(reward.optString("background_color", "#9147FF"));
         userInputCheck.setSelected(reward.optBoolean("is_user_input_required", false));
         skipQueueCheck.setSelected(reward.optBoolean("should_redemptions_skip_request_queue", false));
@@ -739,6 +748,7 @@ public class RewardsPanel extends JDialog {
         cooldownCheck.setSelected(false);
         cooldownSpinner.setEnabled(false);
         cooldownSpinner.setValue(60);
+        chatDelaySpinner.setValue(0);
         typeCombo.setSelectedIndex(0);
         pathField.setText("");
         recursiveCheck.setSelected(false);
@@ -856,6 +866,7 @@ public class RewardsPanel extends JDialog {
         cfg.put("recursive", recursive);
         cfg.put("playMode",  playMode);
         cfg.put("volume",    volume);
+        cfg.put("chatDelaySeconds", chatDelaySpinner.getValue());
 
         if ("video".equals(type)) {
             cfg.put("width",        vidWidth);

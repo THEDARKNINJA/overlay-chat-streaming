@@ -705,6 +705,11 @@ public class ChatOverlay extends JFrame {
      * Procesa un ChatMessage y lo renderiza en el documento.
      * Gestiona eventos de moderación, recompensas y mensajes normales.
      * Debe llamarse siempre desde el EDT.
+     *
+     * <p>Para mensajes de tipo "reward" con {@code chatDelaySeconds > 0},
+     * el media asociado se lanza inmediatamente (para que el streamer no vea
+     * el mensaje antes del susto), pero el render en el chat se pospone
+     * el número de segundos configurado en un hilo virtual.
      */
     private void appendMessage(ChatMessage msg) {
         try {
@@ -714,30 +719,83 @@ public class ChatOverlay extends JFrame {
                 case "clearall"  -> { clearAllMessages();                  return; }
                 case "clearmsg"  -> { clearSingleMessage(msg.messageId()); return; }
             }
-
-            // Recompensas con media asociada: reproducir en background
+ 
+            // Recompensas con media asociada: reproducir inmediatamente,
+            // independientemente del chatDelaySeconds
             if ("reward".equals(msg.eventType()) && msg.eventExtra() != null) {
                 triggerRewardMedia(msg.eventExtra());
             }
+ 
+            // Comprobar si hay retraso configurado para esta recompensa
+            int chatDelaySecs = resolveRewardChatDelay(msg);
+            if (chatDelaySecs > 0) {
+                // Posponer el render en un hilo virtual sin bloquear el EDT
+                Thread.ofVirtual().name("reward-chat-delay").start(() -> {
+                    try {
+                        Thread.sleep(chatDelaySecs * 1000L);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    SwingUtilities.invokeLater(() -> renderMessage(msg));
+                });
+                return;
+            }
+ 
+            // Sin retraso: renderizar inmediatamente en el EDT
+            renderMessage(msg);
+ 
+        } catch (Exception e) {
+            System.err.println("[Overlay] Error añadiendo mensaje: " + e.getMessage());
+        }
+    }
 
+    /**
+     * Devuelve el retraso en segundos configurado para la recompensa del mensaje.
+     * Si el mensaje no es de tipo "reward", o no tiene configuración local,
+     * o no tiene chatDelaySeconds, devuelve 0.
+     *
+     * @param msg Mensaje a consultar.
+     * @return Segundos de retraso, o 0 si no aplica.
+     */
+    private int resolveRewardChatDelay(ChatMessage msg) {
+        if (!"reward".equals(msg.eventType()) || msg.eventExtra() == null) return 0;
+        String[] parts    = msg.eventExtra().split("\\|", 3);
+        String   rewardId = parts.length > 1 ? parts[1] : null;
+        if (rewardId == null) return 0;
+        JSONObject rewardConfig = config.getRewardConfig(rewardId);
+        if (rewardConfig == null) return 0;
+        return rewardConfig.optInt("chatDelaySeconds", 0);
+    }
+ 
+    /**
+     * Renderiza un mensaje en el documento del chat.
+     * Contiene la lógica de render pura, separada de appendMessage para
+     * poder llamarla tanto inmediatamente como tras un retraso.
+     * Debe llamarse siempre desde el EDT.
+     *
+     * @param msg Mensaje a renderizar.
+     */
+    private void renderMessage(ChatMessage msg) {
+        try {
             // Eliminar el mensaje más antiguo si se supera el límite
             trimOldestMessageIfNeeded();
-
+ 
             // Tokenizar emotes y obtener badges
-            int startOffset = doc.getLength();
-            List<EmoteToken> tokens  = resolveTokens(msg);
-            List<String>     badges  = resolveBadges(msg);
-
+            int startOffset      = doc.getLength();
+            List<EmoteToken> tokens = resolveTokens(msg);
+            List<String>     badges = resolveBadges(msg);
+ 
             // Renderizar el mensaje
             emoteRenderer.render(doc, msg.platform(), msg.user(), msg.text(),
                     tokens, badges, msg.userColor(),
                     msg.eventType(), msg.eventExtra(), showBackground);
-
+ 
             int endOffset = doc.getLength();
-
+ 
             // Registrar para limpieza por timeout
             registerForCleanup(doc, startOffset, endOffset);
-
+ 
             // Registrar para moderación (solo mensajes con ID)
             if (msg.messageId() != null) {
                 messageOffsets.put(msg.messageId(), new int[]{startOffset, endOffset});
@@ -746,14 +804,16 @@ public class ChatOverlay extends JFrame {
                 userMessages.computeIfAbsent(msg.user().toLowerCase(),
                         k -> new ArrayList<>()).add(msg.messageId());
             }
-
+ 
             // Scroll al final
             textPane.setCaretPosition(doc.getLength());
-
+ 
         } catch (Exception e) {
-            System.err.println("[Overlay] Error añadiendo mensaje: " + e.getMessage());
+            System.err.println("[Overlay] Error renderizando mensaje: " + e.getMessage());
         }
     }
+
+
 
     /**
      * Extrae el rewardId del eventExtra y reproduce el media asociado
