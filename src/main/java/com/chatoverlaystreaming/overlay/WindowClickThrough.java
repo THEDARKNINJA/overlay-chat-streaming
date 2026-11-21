@@ -43,6 +43,15 @@ public class WindowClickThrough {
     /** Afinidad de captura: ventana excluida de OBS y capturas de pantalla. */
     private static final int WDA_EXCLUDEFROMCAPTURE = 0x00000011;
 
+    /** Handle especial de SetWindowPos: colocar la ventana por encima de todas las no-topmost. */
+    private static final HWND HWND_TOPMOST = new HWND(new Pointer(-1));
+
+    /** Flags de SetWindowPos: no mover (0x2), no redimensionar (0x1), no activar (0x10). */
+    private static final int SWP_NOSIZE     = 0x0001;
+    private static final int SWP_NOMOVE     = 0x0002;
+    private static final int SWP_NOACTIVATE = 0x0010;
+    private static final int SWP_SHOWWINDOW = 0x0040;
+
     /**
      * Extensión de la interfaz User32 de JNA para las funciones de Windows
      * que no están incluidas en la versión estándar de JNA.
@@ -147,5 +156,22 @@ public class WindowClickThrough {
     /** @return true si el click-through está activo actualmente. */
     public boolean isClickThrough() {
         return clickThrough;
+    }
+
+    /**
+     * Reafirma la posición "siempre encima" de la ventana en el orden Z de Windows.
+     *
+     * Otras aplicaciones (juegos en ventana sin bordes, por ejemplo) pueden declararse
+     * topmost después que el overlay y quedar por encima. Al volver a llamar a
+     * SetWindowPos con HWND_TOPMOST, el overlay recupera su sitio en la cima.
+     *
+     * Los flags NOMOVE, NOSIZE y NOACTIVATE garantizan que solo cambia el orden Z:
+     * no mueve la ventana, no la redimensiona y no le quita el foco al juego.
+     *
+     * No funciona sobre juegos en pantalla completa exclusiva.
+     */
+    public void bringToTop() {
+        User32.INSTANCE.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 }

@@ -1108,6 +1108,9 @@ public class ChatOverlay extends JFrame {
                 clickThrough.setExcludeFromCapture(true, config.getPanelAlpha());
                 visibleToObs = false;
                 applyObsVisibility();
+                // Reafirmar "siempre encima" cada 2 segundos para que los juegos
+                // en ventana sin bordes no tapen el overlay
+                new javax.swing.Timer(2000, ev -> clickThrough.bringToTop()).start();
             } catch (Exception e) {
                 System.err.println("[Overlay] Funciones nativas no disponibles: "
                         + e.getMessage());
